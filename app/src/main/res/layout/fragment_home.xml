@@ -1,16 +1,80 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     tools:context=".HomeFragment">
 
-    <!-- TODO: Update blank fragment layout -->
     <TextView
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:text="HOME"
-        android:gravity="center"
-        android:textSize="100px"/>
+        android:id="@+id/app_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentStart="true"
+        android:layout_alignParentTop="true"
+        android:layout_marginStart="25dp"
+        android:layout_marginTop="19dp"
+        android:text="SmartGlass"
+        android:contentDescription="@string/smart_glass"
+        android:textSize="24sp"
+        android:textStyle="bold" />
 
-</FrameLayout>
+    <ImageView
+        android:id="@+id/glass_icon"
+        android:layout_width="280dp"
+        android:layout_height="280dp"
+        android:layout_below="@id/app_title"
+        android:contentDescription="@string/glass_image"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="40dp"
+        android:src="@drawable/sun_glass" />
+
+    <TextView
+        android:id="@+id/device_name"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="My SmartGlass"
+        android:contentDescription="@string/my_smart_glass"
+        android:textSize="25sp"
+        android:textStyle="bold"
+        android:layout_below="@id/glass_icon"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="-10dp" />
+
+    <LinearLayout
+        android:id="@+id/icon_container"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/device_name"
+        android:layout_centerHorizontal="true"
+        android:orientation="horizontal"
+        android:layout_marginTop="12dp">
+
+        <ImageView
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:contentDescription="@string/icon_bluetooth"
+            android:src="@drawable/bluetooth" />
+
+        <ImageView
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/wifi_icon"
+            android:contentDescription="@string/icon_wifi"
+            android:layout_marginStart="20dp"/>
+    </LinearLayout>
+
+    <Button
+        android:id="@+id/btnConnect"
+        android:layout_width="300dp"
+        android:layout_height="100dp"
+        android:layout_below="@id/icon_container"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="30dp"
+        android:text="Kết nối"
+        android:contentDescription="@string/btn_connect"
+        android:enabled="true"
+        android:textSize="40sp"
+        android:backgroundTint="@color/button_on_color"
+        android:textColor="#FFFFFF" />
+
+</RelativeLayout>

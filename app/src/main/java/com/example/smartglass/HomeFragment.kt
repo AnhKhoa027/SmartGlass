@@ -1,59 +1,98 @@
 package com.example.smartglass
 
+import android.graphics.Color
 import android.os.Bundle
-import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Button
+import android.widget.Toast
+import androidx.fragment.app.Fragment
+import com.android.volley.Request
+import com.android.volley.toolbox.StringRequest
+import com.android.volley.toolbox.Volley
+import androidx.core.graphics.toColorInt
 
-// TODO: Rename parameter arguments, choose names that match
-// the fragment initialization parameters, e.g. ARG_ITEM_NUMBER
-private const val ARG_PARAM1 = "param1"
-private const val ARG_PARAM2 = "param2"
-
-/**
- * A simple [Fragment] subclass.
- * Use the [HomeFragment.newInstance] factory method to
- * create an instance of this fragment.
- */
 class HomeFragment : Fragment() {
-    // TODO: Rename and change types of parameters
-    private var param1: String? = null
-    private var param2: String? = null
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        arguments?.let {
-            param1 = it.getString(ARG_PARAM1)
-            param2 = it.getString(ARG_PARAM2)
-        }
-    }
+    private lateinit var connectButton: Button
+    private val esp32ConnectUrl = "http://192.168.4.1/connect"
+    private val esp32DisconnectUrl = "http://192.168.4.1/disconnect"
+    private var isConnected = false
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
-        // Inflate the layout for this fragment
-        return inflater.inflate(R.layout.fragment_home, container, false)
+        val view = inflater.inflate(R.layout.fragment_home, container, false)
+
+        connectButton = view.findViewById(R.id.btnConnect)
+        connectButton.setOnClickListener {
+            if (isConnected) {
+                disconnectFromESP32()
+            } else {
+                connectToESP32()
+            }
+        }
+
+        return view
     }
 
-    companion object {
-        /**
-         * Use this factory method to create a new instance of
-         * this fragment using the provided parameters.
-         *
-         * @param param1 Parameter 1.
-         * @param param2 Parameter 2.
-         * @return A new instance of fragment HomeFragment.
-         */
-        // TODO: Rename and change types and number of parameters
-        @JvmStatic
-        fun newInstance(param1: String, param2: String) =
-            HomeFragment().apply {
-                arguments = Bundle().apply {
-                    putString(ARG_PARAM1, param1)
-                    putString(ARG_PARAM2, param2)
+    fun connectToESP32() {
+        connectButton.apply {
+            isEnabled = false
+            text = getString(R.string.connecting)
+            setBackgroundColor(Color.GRAY)
+        }
+
+        val requestQueue = Volley.newRequestQueue(requireContext())
+        val request = StringRequest(Request.Method.GET, esp32ConnectUrl,
+            {
+                isConnected = true
+                connectButton.apply {
+                    text = getString(R.string.connected)
+                    setBackgroundColor("#4CAF50".toColorInt())
+                    isEnabled = true
                 }
-            }
+            },
+            {
+                Toast.makeText(context, getString(R.string.connect_failed), Toast.LENGTH_SHORT).show()
+                connectButton.apply {
+                    text = getString(R.string.connect)
+                    setBackgroundColor("#2F58C3".toColorInt())
+                    isEnabled = true
+                }
+            })
+
+        requestQueue.add(request)
+    }
+
+    fun disconnectFromESP32() {
+        connectButton.apply {
+            isEnabled = false
+            text = getString(R.string.disconnecting)
+            setBackgroundColor(Color.GRAY)
+        }
+
+        val requestQueue = Volley.newRequestQueue(requireContext())
+        val request = StringRequest(Request.Method.GET, esp32DisconnectUrl,
+            {
+                isConnected = false
+                connectButton.apply {
+                    text = getString(R.string.disconnected)
+                    setBackgroundColor("#A9AFC0".toColorInt())
+                    isEnabled = true
+                }
+            },
+            {
+                Toast.makeText(context, getString(R.string.disconnect_failed), Toast.LENGTH_SHORT).show()
+                connectButton.apply {
+                    text = getString(R.string.connected)
+                    setBackgroundColor("#4CAF50".toColorInt())
+                    isEnabled = true
+                }
+            })
+
+        requestQueue.add(request)
     }
 }

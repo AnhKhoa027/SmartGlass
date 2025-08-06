@@ -1,6 +1,20 @@
 <resources>
     <string name="app_name">SmartGlass</string>
     <string name="voice_input">Voice input</string>
+    <string name="smart_glass">Kính thông minh</string>
+    <string name="glass_image">Biểu tượng Kính thông minh</string>
+    <string name="my_smart_glass">Kính thông minh của tôi</string>
+    <string name="icon_bluetooth">Biểu tượng Bluetooth</string>
+    <string name="icon_wifi">Biểu tượng Wifi</string>
+    <string name="btn_connect">Nút ấn kết nối với Kính thông minh</string>
+    <string name="connected">Đã kết nối</string>
+    <string name="connecting">Đang kết nối...</string>
+    <string name="disconnected">Chưa kết nối</string>
+    <string name="connect_failed">Kết nối thất bại với ESP32</string>
+    <string name="disconnecting">Đang ngắt kết nối...</string>
+    <string name="disconnect_failed">Ngắt kết nối thất bại</string>
+    <string name="connect">Kết nối</string>
+
     <!-- TODO: Remove or change this placeholder text -->
     <string name="hello_blank_fragment">Hello blank fragment</string>
 </resources>
