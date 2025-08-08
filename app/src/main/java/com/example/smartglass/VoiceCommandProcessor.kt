@@ -10,23 +10,20 @@ class VoiceCommandProcessor(
     private val bottomNav: BottomNavigationView,
     private val onConnect: () -> Unit,
     private val onDisconnect: () -> Unit,
-    private val voiceResponder: (String) -> Unit,
-    private val restartListening: () -> Unit
+    private val voiceResponder: (String) -> Unit
 ) {
+    //Các câu lệnh xử lý
     fun handleCommand(command: String) {
         when {
-            // Lệnh kết nối
             command.contains("kết nối", ignoreCase = true) -> {
                 voiceResponder("Đang kết nối thiết bị")
                 onConnect()
-                restartListening()
             }
 
             command.contains("hủy kết nối", ignoreCase = true) ||
                     command.contains("ngắt kết nối", ignoreCase = true) -> {
                 voiceResponder("Đã hủy kết nối thiết bị")
                 onDisconnect()
-                restartListening()
             }
 
             command.contains("tắt mic", ignoreCase = true) ||
@@ -38,18 +35,15 @@ class VoiceCommandProcessor(
             command.contains("cài đặt", ignoreCase = true) -> {
                 bottomNav.selectedItemId = R.id.setting
                 voiceResponder("Chuyển đến cài đặt")
-                restartListening()
             }
 
             command.contains("trang chủ", ignoreCase = true) -> {
                 bottomNav.selectedItemId = R.id.home
                 voiceResponder("Chuyển đến trang chủ")
-                restartListening()
             }
 
             else -> {
                 voiceResponder("Tôi không hiểu lệnh: $command")
-                restartListening()
             }
         }
     }

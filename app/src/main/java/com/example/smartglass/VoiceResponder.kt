@@ -7,6 +7,7 @@ import android.speech.tts.UtteranceProgressListener
 
 import java.util.*
 
+//Phát Lại giọng nói
 class VoiceResponder(private val context: Context) : TextToSpeech.OnInitListener {
     private lateinit var tts: TextToSpeech
     private var isReady = false

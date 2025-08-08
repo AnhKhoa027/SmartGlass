@@ -1,4 +1,5 @@
 <resources>
+    //UI
     <string name="app_name">SmartGlass</string>
     <string name="voice_input">Voice input</string>
     <string name="smart_glass">Kính thông minh</string>
@@ -7,13 +8,22 @@
     <string name="icon_bluetooth">Biểu tượng Bluetooth</string>
     <string name="icon_wifi">Biểu tượng Wifi</string>
     <string name="btn_connect">Nút ấn kết nối với Kính thông minh</string>
+
+    //Lệnh
+    <string name="connect">Kết nối</string>
     <string name="connected">Đã kết nối</string>
     <string name="connecting">Đang kết nối...</string>
     <string name="disconnected">Chưa kết nối</string>
     <string name="connect_failed">Kết nối thất bại với ESP32</string>
     <string name="disconnecting">Đang ngắt kết nối...</string>
     <string name="disconnect_failed">Ngắt kết nối thất bại</string>
-    <string name="connect">Kết nối</string>
+    <string name="voice_prompt">Hãy nói lệnh...</string>
+
+    //Phản hồi
+    <string name="voice_greeting">Chào bạn đến với SmartGlass. Hãy bấm mic ở góc dưới màn hình để ra lệnh.</string>
+    <string name="voice_not_supported">Thiết bị không hỗ trợ giọng nói</string>
+    <string name="voice_not_understood">Xin lỗi, tôi không hiểu lệnh của bạn</string>
+    <string name="voice_connection_failed">Kết nối thất bại. Vui lòng thử lại.</string>
 
     <!-- TODO: Remove or change this placeholder text -->
     <string name="hello_blank_fragment">Hello blank fragment</string>
