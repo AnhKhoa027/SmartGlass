@@ -1,5 +1,5 @@
 <resources>
-    //UI
+    <!-- UI -->
     <string name="app_name">SmartGlass</string>
     <string name="voice_input">Voice input</string>
     <string name="smart_glass">Kính thông minh</string>
@@ -9,7 +9,7 @@
     <string name="icon_wifi">Biểu tượng Wifi</string>
     <string name="btn_connect">Nút ấn kết nối với Kính thông minh</string>
 
-    //Lệnh
+    <!-- Lệnh -->
     <string name="connect">Kết nối</string>
     <string name="connected">Đã kết nối</string>
     <string name="connecting">Đang kết nối...</string>
@@ -19,11 +19,23 @@
     <string name="disconnect_failed">Ngắt kết nối thất bại</string>
     <string name="voice_prompt">Hãy nói lệnh...</string>
 
-    //Phản hồi
+    <!-- Phản hồi -->
     <string name="voice_greeting">Chào bạn đến với SmartGlass. Hãy bấm mic ở góc dưới màn hình để ra lệnh.</string>
     <string name="voice_not_supported">Thiết bị không hỗ trợ giọng nói</string>
     <string name="voice_not_understood">Xin lỗi, tôi không hiểu lệnh của bạn</string>
     <string name="voice_connection_failed">Kết nối thất bại. Vui lòng thử lại.</string>
+
+    <!-- Setting Fragment -->
+    <string name="title_tts_settings">Cài đặt giọng nói</string>
+    <string name="title_info_support">Thông tin và hỗ trợ</string>
+    <string name="text_auto_connect">Tự động kết nối khi mở app</string>
+    <string name="btn_app_info">Thông tin phiên bản và nhóm phát triển</string>
+    <string name="title_app_info">Thông tin ứng dụng</string>
+    <string name="close">Đóng</string>
+    <string name="app_info_message">%1$s\nPhiên bản: %2$s\nNhóm Nghiên cứu khoa học: C1SE.16\nTrương Công Thành\nLê Hòa Hiệp\nNguyễn Văn Hướng\nPhạm Anh Khoa\nNguyễn Tấn Việt</string>
+    <string name="hint_esp32_ip">Nhập IP ESP32 (vd: 192.168.4.1)</string>
+    <string name="label_tts_volume">Âm lượng giọng nói</string>
+    <string name="label_input_ip">IP Kính thông minh</string>
 
     <!-- TODO: Remove or change this placeholder text -->
     <string name="hello_blank_fragment">Hello blank fragment</string>

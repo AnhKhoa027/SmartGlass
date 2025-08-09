@@ -1,13 +1,11 @@
 package com.example.smartglass
 
 import android.content.Context
+import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
-
-
 import java.util.*
 
-//Phát Lại giọng nói
 class VoiceResponder(private val context: Context) : TextToSpeech.OnInitListener {
     private lateinit var tts: TextToSpeech
     private var isReady = false
@@ -47,7 +45,15 @@ class VoiceResponder(private val context: Context) : TextToSpeech.OnInitListener
             }
         })
 
-        tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "UTTERANCE_ID")
+        val prefs = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+        val savedVolume = prefs.getInt("volume", 100).coerceIn(0, 100)
+        val volumeFloat = savedVolume / 100f
+
+        val params = Bundle().apply {
+            putFloat("volume", volumeFloat)
+        }
+
+        tts.speak(text, TextToSpeech.QUEUE_FLUSH, params, "UTTERANCE_ID")
     }
 
     fun shutdown() {
