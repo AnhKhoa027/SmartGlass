@@ -5,22 +5,38 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.SeekBar
-import android.widget.Button
+import android.widget.*
 import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.widget.SwitchCompat
 import androidx.fragment.app.Fragment
 import androidx.core.content.edit
 
 class SettingFragment : Fragment() {
 
     private lateinit var seekBarVolume: SeekBar
-    private lateinit var switchAutoConnectDevice: SwitchCompat
-    private lateinit var buttonAppInfo: Button
 
-    // Khởi tạo SharedPreferences chỉ 1 lần
+    private lateinit var tvGiongDoc: TextView
+    private lateinit var tvTocDoDoc: TextView
+    private lateinit var tvAppVersion: TextView
+
     private val prefs by lazy {
         requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    }
+
+    private fun showDevTeamDialog() {
+        val devTeamInfo = """
+        - Nhóm phát triển:
+        • Lê Hòa Hiệp
+        • Nguyễn Văn Hướng
+        • Phạm Anh Khoa
+        • Trương Công Thành
+        • Nguyễn Tấn Việt
+    """.trimIndent()
+
+        AlertDialog.Builder(requireContext())
+            .setTitle("Thông tin nhóm")
+            .setMessage(devTeamInfo)
+            .setPositiveButton("Đóng", null)
+            .show()
     }
 
     override fun onCreateView(
@@ -30,68 +46,109 @@ class SettingFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         seekBarVolume = view.findViewById(R.id.seekbar_tts_volume)
-        switchAutoConnectDevice = view.findViewById(R.id.switch_auto_connect)
-        buttonAppInfo = view.findViewById(R.id.btn_app_info)
+
+        tvGiongDoc = view.findViewById(R.id.tv_giong_doc)
+        tvTocDoDoc = view.findViewById(R.id.tv_toc_do_doc)
+        tvAppVersion = view.findViewById(R.id.tv_app_version)
+
+        val tvDevTeam = view.findViewById<TextView>(R.id.tv_dev_team)
+        tvDevTeam.setOnClickListener {
+            showDevTeamDialog()
+        }
+
+        // Hiển thị phiên bản trực tiếp trong TextView thay vì show dialog
+        val versionName = runCatching {
+            requireContext().packageManager.getPackageInfo(requireContext().packageName, 0).versionName
+        }.getOrDefault("1.0")
+        tvAppVersion.text = "Phiên bản ứng dụng: $versionName"
 
         loadSettings()
         setupListeners()
     }
 
     private fun loadSettings() {
+        // Âm lượng
         seekBarVolume.progress = prefs.getInt(KEY_VOLUME, DEFAULT_VOLUME)
             .coerceIn(MIN_VOLUME, MAX_VOLUME)
-        switchAutoConnectDevice.isChecked = prefs.getBoolean(KEY_AUTO_CONNECT, false)
+
+        // Hiển thị lựa chọn hiện tại cho giọng đọc
+        val voice = prefs.getString(KEY_VOICE, "male")
+        tvGiongDoc.text = if (voice == "female") "Giọng đọc: Nữ" else "Giọng đọc: Nam"
+
+        // Hiển thị lựa chọn hiện tại cho tốc độ
+        when (prefs.getString(KEY_SPEED, "normal")) {
+            "slow" -> tvTocDoDoc.text = "Tốc độ đọc: Chậm"
+            "fast" -> tvTocDoDoc.text = "Tốc độ đọc: Nhanh"
+            "very_fast" -> tvTocDoDoc.text = "Tốc độ đọc: Rất nhanh"
+            else -> tvTocDoDoc.text = "Tốc độ đọc: Bình thường"
+        }
     }
 
-    private fun saveSettings() {
+    private fun saveSettings(key: String, value: String) {
         prefs.edit {
-            putInt(KEY_VOLUME, seekBarVolume.progress)
-            putBoolean(KEY_AUTO_CONNECT, switchAutoConnectDevice.isChecked)
+            putString(key, value)
         }
+        loadSettings()
     }
 
     private fun setupListeners() {
         seekBarVolume.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                saveSettings()
+                prefs.edit { putInt(KEY_VOLUME, progress) }
             }
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         })
 
-        switchAutoConnectDevice.setOnCheckedChangeListener { _, _ ->
-            saveSettings()
+        // Khi click vào giọng đọc → show dialog lựa chọn
+        tvGiongDoc.setOnClickListener {
+            val voices = arrayOf("Nam", "Nữ")
+            val checked = if (prefs.getString(KEY_VOICE, "male") == "female") 1 else 0
+
+            AlertDialog.Builder(requireContext())
+                .setTitle("Chọn giọng đọc")
+                .setSingleChoiceItems(voices, checked) { dialog, which ->
+                    val selected = if (which == 1) "female" else "male"
+                    saveSettings(KEY_VOICE, selected)
+                    dialog.dismiss()
+                }
+                .setNegativeButton("Hủy", null)
+                .show()
         }
 
-        buttonAppInfo.setOnClickListener {
-            showAppInfoDialog()
+        // Khi click vào tốc độ đọc → show dialog lựa chọn
+        tvTocDoDoc.setOnClickListener {
+            val speeds = arrayOf("Chậm", "Bình thường", "Nhanh", "Rất nhanh")
+            val current = when (prefs.getString(KEY_SPEED, "normal")) {
+                "slow" -> 0
+                "normal" -> 1
+                "fast" -> 2
+                "very_fast" -> 3
+                else -> 1
+            }
+
+            AlertDialog.Builder(requireContext())
+                .setTitle("Chọn tốc độ đọc")
+                .setSingleChoiceItems(speeds, current) { dialog, which ->
+                    val selected = when (which) {
+                        0 -> "slow"
+                        2 -> "fast"
+                        3 -> "very_fast"
+                        else -> "normal"
+                    }
+                    saveSettings(KEY_SPEED, selected)
+                    dialog.dismiss()
+                }
+                .setNegativeButton("Hủy", null)
+                .show()
         }
-    }
-
-    private fun showAppInfoDialog() {
-        val context = requireContext()
-        val appName = context.getString(R.string.app_name)
-        val versionName = runCatching {
-            context.packageManager.getPackageInfo(context.packageName, 0).versionName
-        }.getOrDefault("1.0")
-
-        val message = getString(
-            R.string.app_info_message,
-            appName,
-            versionName
-        )
-
-        AlertDialog.Builder(context)
-            .setTitle(R.string.title_app_info)
-            .setMessage(message)
-            .setPositiveButton(R.string.close, null)
-            .show()
     }
 
     companion object {
         private const val PREFS_NAME = "app_settings"
-        private const val KEY_AUTO_CONNECT = "auto_connect"
         private const val KEY_VOLUME = "volume"
+        private const val KEY_VOICE = "voice"
+        private const val KEY_SPEED = "speed"
 
         private const val MIN_VOLUME = 0
         private const val MAX_VOLUME = 100

@@ -6,36 +6,57 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:showDividers="none">
+        android:orientation="vertical">
 
-
+        <!-- Audio Section -->
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/label_input_ip"
+            android:text="@string/label_audio"
             android:textStyle="bold"
-            android:textSize="18sp"
-            android:textColor="@android:color/black"
+            android:textSize="22sp"
+            android:textColor="#4CAF50"
             android:paddingTop="16dp"
             android:paddingBottom="8dp" />
 
-        <EditText
-            android:id="@+id/edittext_esp32_ip"
+        <!-- Giọng đọc -->
+        <TextView
+            android:id="@+id/tv_giong_doc"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="@string/hint_esp32_ip"
-            android:layout_marginBottom="24dp"
-            android:inputType="text"
-            android:imeOptions="actionDone"
-            android:importantForAutofill="no"
-            android:autofillHints="" />
+            android:text="@string/label_giong_doc"
+            android:textSize="18sp"
+            android:textColor="@android:color/black"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp" />
 
+        <!-- Radio group -->
+        <RadioGroup
+            android:id="@+id/rg_voice_gender"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone"
+            android:layout_marginBottom="16dp">
+
+            <RadioButton
+                android:id="@+id/rb_male"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/voice_male" />
+
+            <RadioButton
+                android:id="@+id/rb_female"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/voice_female" />
+        </RadioGroup>
+
+        <!-- Âm lượng giọng nói -->
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="@string/label_tts_volume"
-            android:textStyle="bold"
             android:textSize="18sp"
             android:textColor="@android:color/black"
             android:paddingTop="16dp"
@@ -49,35 +70,86 @@
             android:progress="100"
             android:layout_marginBottom="24dp" />
 
-        <androidx.appcompat.widget.SwitchCompat
-            android:id="@+id/switch_auto_connect"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/text_auto_connect"
-            android:layout_marginBottom="24dp"
-            android:minHeight="48dp"
-            android:padding="12dp"
-            android:layout_gravity="start" />
-
+        <!-- Tốc độ đọc -->
         <TextView
+            android:id="@+id/tv_toc_do_doc"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/title_info_support"
-            android:textStyle="bold"
+            android:text="@string/label_tts_speed"
             android:textSize="18sp"
             android:textColor="@android:color/black"
             android:paddingTop="16dp"
             android:paddingBottom="8dp" />
 
-        <Button
-            android:id="@+id/btn_app_info"
+        <RadioGroup
+            android:id="@+id/rg_speed"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/btn_app_info"
-            android:layout_marginBottom="12dp"
-            android:minWidth="120dp"
-            android:paddingHorizontal="24dp"
-            android:layout_gravity="center_horizontal" />
+            android:orientation="vertical"
+            android:visibility="gone"
+            android:layout_marginBottom="16dp">
+
+            <RadioButton
+                android:id="@+id/rb_speed_slow"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/speed_slow" />
+
+            <RadioButton
+                android:id="@+id/rb_speed_normal"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:checked="true"
+                android:text="@string/speed_normal" />
+
+            <RadioButton
+                android:id="@+id/rb_speed_fast"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/speed_fast" />
+
+            <RadioButton
+                android:id="@+id/rb_speed_very_fast"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/speed_very_fast" />
+        </RadioGroup>
+
+
+        <!-- Thông tin -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/label_info"
+            android:textStyle="bold"
+            android:textSize="22sp"
+            android:textColor="#4CAF50"
+            android:paddingTop="20dp"
+            android:paddingBottom="8dp" />
+
+        <CheckBox
+            android:id="@+id/cb_unlock_device"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="18sp"
+            android:text="@string/checkbox_unlock_device"
+            android:layout_marginBottom="16dp" />
+
+        <TextView
+            android:id="@+id/tv_dev_team"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/label_team_info"
+            android:textSize="18sp"
+            android:layout_marginBottom="8dp" />
+
+        <TextView
+            android:id="@+id/tv_app_version"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/label_app_version"
+            android:textSize="18sp"
+            android:layout_marginBottom="12dp" />
 
     </LinearLayout>
 </ScrollView>

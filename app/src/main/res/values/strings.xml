@@ -33,9 +33,28 @@
     <string name="title_app_info">Thông tin ứng dụng</string>
     <string name="close">Đóng</string>
     <string name="app_info_message">%1$s\nPhiên bản: %2$s\nNhóm Nghiên cứu khoa học: C1SE.16\nTrương Công Thành\nLê Hòa Hiệp\nNguyễn Văn Hướng\nPhạm Anh Khoa\nNguyễn Tấn Việt</string>
-    <string name="hint_esp32_ip">Nhập IP ESP32 (vd: 192.168.4.1)</string>
-    <string name="label_tts_volume">Âm lượng giọng nói</string>
-    <string name="label_input_ip">IP Kính thông minh</string>
+
+    <string name="speed_slow">Chậm</string>
+    <string name="speed_normal">Bình Thường</string>
+    <string name="speed_fast">Nhanh</string>
+    <string name="speed_very_fast">Rất Nhanh</string>
+
+
+    <string name="label_audio">Audio</string>
+    <string name="label_giong_doc">Giọng Đọc</string>
+    <string name="voice_male">Nam</string>
+    <string name="voice_female">Nữ</string>
+    <string name="label_tts_volume">Âm Lượng Giọng Nói</string>
+    <string name="label_tts_speed">Tốc Độ Đọc</string>
+
+
+    <string name="label_info">Thông Tin</string>
+    <string name="checkbox_unlock_device">Không Khóa Thiết Bị</string>
+    <string name="label_team_info">Thông Tin Nhóm Phát Triển</string>
+    <string name="label_app_version">Phiên Bản Ứng Dụng 1.0.0</string>
+
+
+
 
     <!-- TODO: Remove or change this placeholder text -->
     <string name="hello_blank_fragment">Hello blank fragment</string>
