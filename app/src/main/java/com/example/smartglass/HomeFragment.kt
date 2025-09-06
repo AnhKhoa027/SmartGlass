@@ -1,11 +1,13 @@
 package com.example.smartglass
 
 import android.content.Context
-import android.graphics.Color
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.Toast
 import androidx.core.graphics.toColorInt
@@ -20,6 +22,7 @@ class HomeFragment : Fragment() {
     private lateinit var btnConnectESP32: Button
     private lateinit var requestQueue: RequestQueue
     private var isESP32Connected = false
+    private lateinit var webView: WebView
 
     private val esp32Ip: String
         get() = requireContext()
@@ -33,7 +36,17 @@ class HomeFragment : Fragment() {
         savedInstanceState: Bundle?
     ): View {
         val view = inflater.inflate(R.layout.fragment_home, container, false)
+
         btnConnectESP32 = view.findViewById(R.id.btnConnect)
+        webView = view.findViewById(R.id.webViewCam)
+
+        // Setup WebView
+        val settings = webView.settings
+        settings.javaScriptEnabled = true
+        settings.domStorageEnabled = true
+        settings.loadsImagesAutomatically = true
+        settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+        webView.webViewClient = WebViewClient()
 
         btnConnectESP32.setOnClickListener {
             if (isESP32Connected) {
@@ -70,10 +83,13 @@ class HomeFragment : Fragment() {
         updateButtonState(R.string.connecting, "#808080", false)
 
         val request = StringRequest(
-            Request.Method.GET, buildESP32Url("connect"),
+            Request.Method.GET, buildESP32Url("capture"),
             {
                 isESP32Connected = true
                 updateButtonState(R.string.connected, "#4CAF50", true)
+
+                // Khi connect thành công -> load stream video
+                webView.loadUrl("http://$esp32Ip:81/stream")
             },
             {
                 Toast.makeText(context, R.string.connect_failed, Toast.LENGTH_SHORT).show()
@@ -84,20 +100,12 @@ class HomeFragment : Fragment() {
     }
 
     fun disconnectFromESP32() {
-        updateButtonState(R.string.disconnecting, "#808080", false)
+        // Không gọi API, chỉ ngắt stream
+        isESP32Connected = false
+        updateButtonState(R.string.connect, "#2F58C3", true)
 
-        val request = StringRequest(
-            Request.Method.GET, buildESP32Url("disconnect"),
-            {
-                isESP32Connected = false
-                updateButtonState(R.string.disconnected, "#A9AFC0", true)
-            },
-            {
-                Toast.makeText(context, R.string.disconnect_failed, Toast.LENGTH_SHORT).show()
-                updateButtonState(R.string.connected, "#4CAF50", true)
-            }
-        )
-        requestQueue.add(request)
+        // Ngắt stream
+        webView.loadUrl("about:blank")
     }
 
     companion object {

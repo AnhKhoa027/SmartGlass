@@ -13,7 +13,7 @@
         android:layout_alignParentTop="true"
         android:layout_marginStart="25dp"
         android:layout_marginTop="19dp"
-        android:text="SmartGlass"
+        android:text="EdgeSight SmartGlass"
         android:contentDescription="@string/smart_glass"
         android:textSize="24sp"
         android:textStyle="bold" />
@@ -27,6 +27,12 @@
         android:layout_centerHorizontal="true"
         android:layout_marginTop="40dp"
         android:src="@drawable/sun_glass" />
+
+    <WebView
+        android:id="@+id/webViewCam"
+        android:layout_width="match_parent"
+        android:layout_height="280dp" />
+   
 
     <TextView
         android:id="@+id/device_name"
