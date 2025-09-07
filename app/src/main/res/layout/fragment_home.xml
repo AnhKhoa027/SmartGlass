@@ -15,24 +15,34 @@
         android:layout_marginTop="19dp"
         android:text="EdgeSight SmartGlass"
         android:contentDescription="@string/smart_glass"
-        android:textSize="24sp"
+        android:textSize="30sp"
         android:textStyle="bold" />
 
-    <ImageView
-        android:id="@+id/glass_icon"
-        android:layout_width="280dp"
+    <!-- FrameLayout giữ nguyên kích thước,
+         chứa cả glass icon và WebView -->
+    <FrameLayout
+        android:id="@+id/cam_container"
+        android:layout_width="match_parent"
         android:layout_height="280dp"
         android:layout_below="@id/app_title"
-        android:contentDescription="@string/glass_image"
         android:layout_centerHorizontal="true"
-        android:layout_marginTop="40dp"
-        android:src="@drawable/sun_glass" />
+        android:layout_marginTop="30dp">
 
-    <WebView
-        android:id="@+id/webViewCam"
-        android:layout_width="match_parent"
-        android:layout_height="280dp" />
-   
+        <ImageView
+            android:id="@+id/glass_icon"
+            android:layout_width="280dp"
+            android:layout_height="280dp"
+            android:layout_gravity="center"
+            android:src="@drawable/sun_glass"
+            android:contentDescription="@string/glass_image"
+            android:visibility="visible" />
+
+        <WebView
+            android:id="@+id/webViewCam"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone" />
+    </FrameLayout>
 
     <TextView
         android:id="@+id/device_name"
@@ -40,11 +50,11 @@
         android:layout_height="wrap_content"
         android:text="My SmartGlass"
         android:contentDescription="@string/my_smart_glass"
-        android:textSize="25sp"
+        android:textSize="30sp"
         android:textStyle="bold"
-        android:layout_below="@id/glass_icon"
+        android:layout_below="@id/cam_container"
         android:layout_centerHorizontal="true"
-        android:layout_marginTop="-10dp" />
+        android:layout_marginTop="30dp" />
 
     <LinearLayout
         android:id="@+id/icon_container"
@@ -58,29 +68,28 @@
         <ImageView
             android:layout_width="40dp"
             android:layout_height="40dp"
-            android:contentDescription="@string/icon_bluetooth"
-            android:src="@drawable/bluetooth" />
+            android:src="@drawable/bluetooth"
+            android:contentDescription="@string/icon_bluetooth" />
 
         <ImageView
             android:layout_width="40dp"
             android:layout_height="40dp"
+            android:layout_marginStart="20dp"
             android:src="@drawable/wifi_icon"
-            android:contentDescription="@string/icon_wifi"
-            android:layout_marginStart="20dp"/>
+            android:contentDescription="@string/icon_wifi" />
     </LinearLayout>
 
     <Button
         android:id="@+id/btnConnect"
-        android:layout_width="300dp"
-        android:layout_height="100dp"
+        android:layout_width="350dp"
+        android:layout_height="150dp"
         android:layout_below="@id/icon_container"
         android:layout_centerHorizontal="true"
         android:layout_marginTop="30dp"
         android:text="Kết nối"
         android:contentDescription="@string/btn_connect"
+        android:textSize="45dp"
         android:enabled="true"
-        android:textSize="40sp"
         android:backgroundTint="@color/button_on_color"
         android:textColor="#FFFFFF" />
-
 </RelativeLayout>
