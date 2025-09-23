@@ -8,4 +8,5 @@
     <color name="button_on_color">#2F58C3</color>
     <color name="button_off_color">#A9AFC0</color>
     <color name="connecting_color">#4CAF50</color>
+    <color name="bounding_box_color">#FF00FF00</color>
 </resources>

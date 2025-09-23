@@ -5,6 +5,7 @@
     android:layout_height="match_parent"
     tools:context=".HomeFragment">
 
+    <!-- Tiêu đề -->
     <TextView
         android:id="@+id/app_title"
         android:layout_width="wrap_content"
@@ -18,8 +19,7 @@
         android:textSize="30sp"
         android:textStyle="bold" />
 
-    <!-- FrameLayout giữ nguyên kích thước,
-         chứa cả glass icon và WebView -->
+    <!-- Container hiển thị camera + overlay YOLO -->
     <FrameLayout
         android:id="@+id/cam_container"
         android:layout_width="match_parent"
@@ -28,22 +28,31 @@
         android:layout_centerHorizontal="true"
         android:layout_marginTop="30dp">
 
-        <ImageView
-            android:id="@+id/glass_icon"
-            android:layout_width="280dp"
-            android:layout_height="280dp"
-            android:layout_gravity="center"
-            android:src="@drawable/sun_glass"
-            android:contentDescription="@string/glass_image"
-            android:visibility="visible" />
-
+        <!-- WebView hiển thị luồng ESP32-CAM -->
         <WebView
             android:id="@+id/webViewCam"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:visibility="gone" />
+
+        <!-- Overlay YOLO -->
+        <com.example.smartglass.ObjectDetection.OverlayView
+            android:id="@+id/overlay"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <!-- Icon kính (hiện khi chưa kết nối) -->
+        <ImageView
+            android:id="@+id/glass_icon"
+            android:layout_width="300dp"
+            android:layout_height="300dp"
+            android:layout_gravity="center"
+            android:src="@drawable/sun_glass"
+            android:contentDescription="@string/glass_image"
+            android:visibility="visible" />
     </FrameLayout>
 
+    <!-- Tên thiết bị -->
     <TextView
         android:id="@+id/device_name"
         android:layout_width="wrap_content"
@@ -56,6 +65,7 @@
         android:layout_centerHorizontal="true"
         android:layout_marginTop="30dp" />
 
+    <!-- Icon bluetooth + wifi -->
     <LinearLayout
         android:id="@+id/icon_container"
         android:layout_width="wrap_content"
@@ -79,6 +89,7 @@
             android:contentDescription="@string/icon_wifi" />
     </LinearLayout>
 
+    <!-- Nút kết nối -->
     <Button
         android:id="@+id/btnConnect"
         android:layout_width="350dp"
@@ -88,7 +99,7 @@
         android:layout_marginTop="30dp"
         android:text="Kết nối"
         android:contentDescription="@string/btn_connect"
-        android:textSize="45dp"
+        android:textSize="45sp"
         android:enabled="true"
         android:backgroundTint="@color/button_on_color"
         android:textColor="#FFFFFF" />

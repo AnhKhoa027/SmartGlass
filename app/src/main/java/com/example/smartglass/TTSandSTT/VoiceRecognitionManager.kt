@@ -1,4 +1,4 @@
-package com.example.smartglass
+package com.example.smartglass.TTSandSTT
 
 import android.content.ActivityNotFoundException
 import android.content.Context
@@ -7,6 +7,7 @@ import android.speech.RecognizerIntent
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
+import com.example.smartglass.R
 
 // Nhận giọng nói từ micro
 class VoiceRecognitionManager(

@@ -1,9 +1,10 @@
-package com.example.smartglass
+package com.example.smartglass.TTSandSTT
 
 import android.content.Context
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import com.example.smartglass.MainActivity
 import java.util.*
 
 class VoiceResponder(private val context: Context) : TextToSpeech.OnInitListener {

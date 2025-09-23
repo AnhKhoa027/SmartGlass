@@ -1,7 +1,8 @@
-package com.example.smartglass
+package com.example.smartglass.TTSandSTT
 
 import android.content.Context
 import androidx.fragment.app.FragmentActivity
+import com.example.smartglass.R
 import com.google.android.material.bottomnavigation.BottomNavigationView
 
 class VoiceCommandProcessor(
