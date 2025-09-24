@@ -1,220 +1,218 @@
 package com.example.smartglass
 
 import android.content.Context
-import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Bundle
 import android.view.*
-import android.webkit.WebSettings
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.Toast
 import androidx.core.graphics.toColorInt
 import androidx.fragment.app.Fragment
-import com.android.volley.Request
 import com.android.volley.RequestQueue
-import com.android.volley.toolbox.StringRequest
 import com.android.volley.toolbox.Volley
-import com.example.smartglass.ObjectDetection.*
 import com.example.smartglass.DetectResponse.DetectionSpeaker
+import com.example.smartglass.ObjectDetection.OverlayView
 import com.example.smartglass.TTSandSTT.VoiceResponder
+import com.example.smartglass.HomeAction.*
 import kotlinx.coroutines.*
 import java.net.HttpURLConnection
 import java.net.URL
 
+/**
+ * HomeFragment
+ * -------------------
+ * Đây là **màn hình chính** hiển thị camera stream và xử lý logic kết nối với
+ * camera Xiao ESP32S3 + YOLO + API fallback.
+ *
+ * Nhiệm vụ:
+ * - Quản lý nút kết nối/ngắt kết nối (btnConnectXiaoCam).
+ * - Dùng XiaoCamManager để kết nối tới camera ESP32.
+ * - Dùng CameraViewManager để hiển thị stream qua WebView + overlay bounding box.
+ * - Khởi tạo DetectionManager để chạy YOLO detect, tracking, phát hiện giọng nói.
+ * - Nếu YOLO không nhận diện được thì gọi ApiDetectionManager (HuggingFace API).
+ * - Vòng lặp `startFrameLoop()` liên tục tải frame từ camera -> detect.
+ *
+ * Liên quan:
+ * - XiaoCamManager.kt : xử lý connect/disconnect tới ESP32S3
+ * - CameraViewManager.kt : vẽ icon kính / stream / overlay box
+ * - DetectionManager.kt : YOLO detect + tracking + TTS speaker
+ * - ApiDetectionManager.kt : fallback gọi API HuggingFace khi YOLO không nhận diện
+ */
 class HomeFragment : Fragment() {
 
-    private lateinit var btnConnectESP32: Button
-    private lateinit var requestQueue: RequestQueue
-    private var isESP32Connected = false
+    // === UI components ===
+    private lateinit var btnConnectXiaoCam: Button
+    private lateinit var requestQueue: RequestQueue      
 
-    private lateinit var webView: WebView
-    private lateinit var glassIcon: ImageView
-    private lateinit var overlayView: OverlayView
+    private lateinit var cameraViewManager: CameraViewManager
+    private lateinit var xiaoCamManager: XiaoCamManager
 
-    private var detector: Detector? = null
-    private val tracker = ObjectTracker(maxObjects = 5, iouThreshold = 0.5f)
-
-    private lateinit var voiceResponder: VoiceResponder
-    private lateinit var detectionSpeaker: DetectionSpeaker
+    // === Detection & Voice ===
+    private var detectionManager: DetectionManager? = null
+    private var voiceResponder: VoiceResponder? = null
+    private var detectionSpeaker: DetectionSpeaker? = null
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
-    private val esp32Ip: String
+    private val xiaoCamIp: String
         get() = requireContext()
             .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getString(KEY_ESP32_IP, DEFAULT_IP) ?: DEFAULT_IP
+            .getString(KEY_XIAOCAM_IP, DEFAULT_IP) ?: DEFAULT_IP
 
-    private fun buildESP32Url(path: String) = "http://$esp32Ip/$path"
-
+    // === Lifecycle ===
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
         val view = inflater.inflate(R.layout.fragment_home, container, false)
 
-        btnConnectESP32 = view.findViewById(R.id.btnConnect)
-        glassIcon = view.findViewById(R.id.glass_icon)
-        overlayView = view.findViewById(R.id.overlay)
-        webView = view.findViewById(R.id.webViewCam)
+        btnConnectXiaoCam = view.findViewById(R.id.btnConnect)
+        val glassIcon = view.findViewById<ImageView>(R.id.glass_icon)
+        val overlayView = view.findViewById<OverlayView>(R.id.overlay)
+        val webView = view.findViewById<android.webkit.WebView>(R.id.webViewCam)
 
-        showGlassIcon()
-
-        btnConnectESP32.setOnClickListener {
-            if (isESP32Connected) disconnectFromESP32() else connectToESP32()
-        }
+        // Khởi tạo manager quản lý giao diện camera
+        cameraViewManager = CameraViewManager(webView, glassIcon, overlayView)
 
         return view
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+
         requestQueue = Volley.newRequestQueue(requireContext())
 
-        voiceResponder = VoiceResponder(requireContext())
-        detectionSpeaker = DetectionSpeaker(requireContext(), voiceResponder)
+        xiaoCamManager = XiaoCamManager(requireContext(), requestQueue) { xiaoCamIp }
 
-        // Auto-connect nếu bật trong cài đặt
-        val prefs = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val autoConnect = prefs.getBoolean(KEY_AUTO_CONNECT, false)
-        if (autoConnect) connectToESP32()
+        // Set sự kiện click cho nút Connect/Disconnect
+        btnConnectXiaoCam.setOnClickListener {
+            if (xiaoCamManager.isConnected) disconnectFromXiaoCam()
+            else connectToXiaoCam()
+        }
     }
 
+
     private fun updateButtonState(textRes: Int, bgColor: String, enabled: Boolean) {
-        btnConnectESP32.apply {
+        btnConnectXiaoCam.apply {
             text = getString(textRes)
             setBackgroundColor(bgColor.toColorInt())
             isEnabled = enabled
         }
     }
 
-    fun connectToESP32() {
+    /**
+     * Đảm bảo các manager (YOLO, Speaker, API) được khởi tạo 1 lần sau khi connect.
+     */
+    private fun ensureManagers() {
+        if (voiceResponder == null)
+            voiceResponder = VoiceResponder(requireContext())
+
+        if (detectionSpeaker == null)
+            detectionSpeaker = DetectionSpeaker(requireContext(), voiceResponder!!)
+
+        if (detectionManager == null) {
+            // Manager gọi HuggingFace API (fallback khi YOLO không nhận diện)
+            val apiManager = ApiDetectionManager(
+                requireContext(),
+                apiToken = "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"
+            )
+            // DetectionManager chính (YOLO + tracking + speaker + API fallback)
+            detectionManager = DetectionManager(
+                requireContext(),
+                cameraViewManager,
+                detectionSpeaker!!,
+                apiManager,
+                scope
+            )
+        }
+    }
+
+    /**
+     * Thực hiện kết nối tới camera Xiao ESP32S3
+     */
+    fun connectToXiaoCam() {
         updateButtonState(R.string.connecting, "#808080", false)
-        voiceResponder.speak("Đang kết nối với kính")
+        voiceResponder?.speak("Đang kết nối với kính")
 
-        val request = StringRequest(
-            Request.Method.GET, buildESP32Url("capture"),
-            {
-                isESP32Connected = true
+        xiaoCamManager.connect(
+            onSuccess = {
+                ensureManagers()
                 updateButtonState(R.string.connected, "#4CAF50", true)
-
-                showWebView()
-                webView.loadUrl("http://$esp32Ip:81/stream")
-
-                // Lazy init YOLO
-                if (detector == null) {
-                    detector = Detector(
-                        context = requireContext(),
-                        modelPath = "yolov8n_int8.tflite",
-                        labelPath = "example_label_file.txt",
-                        detectorListener = object : Detector.DetectorListener {
-                            override fun onEmptyDetect() {
-                                activity?.runOnUiThread { overlayView.clear() }
-                            }
-
-                            override fun onDetect(boundingBoxes: List<BoundingBox>, inferenceTime: Long) {
-                                activity?.runOnUiThread {
-                                    val tracked = tracker.update(boundingBoxes)
-                                    overlayView.setResults(tracked.map { it.smoothBox })
-                                    detectionSpeaker.speakDetections(tracked, overlayView.width, overlayView.height)
-                                }
-                            }
-                        },
-                        message = { println(it) }
-                    )
-                }
-
-                startFrameLoop()
-                voiceResponder.speak("Kết nối thành công")
+                cameraViewManager.showWebView(xiaoCamIp)   // Hiển thị stream
+                startFrameLoop()                          // Bắt đầu vòng lặp nhận frame
+                voiceResponder?.speak("Kết nối thành công")
             },
-            {
+            onFailure = {
                 Toast.makeText(context, R.string.connect_failed, Toast.LENGTH_SHORT).show()
                 updateButtonState(R.string.connect, "#2F58C3", true)
-                showGlassIcon()
-                voiceResponder.speak("Kết nối thất bại")
+                cameraViewManager.showGlassIcon()
+                voiceResponder?.speak("Kết nối thất bại")
             }
         )
-        requestQueue.add(request)
     }
 
-    fun disconnectFromESP32() {
-        isESP32Connected = false
+    /**
+     * Ngắt kết nối với camera ESP32S3
+     */
+    fun disconnectFromXiaoCam() {
+        xiaoCamManager.disconnect()
         updateButtonState(R.string.connect, "#2F58C3", true)
 
-        webView.stopLoading()
-        webView.loadUrl("about:blank")
-        webView.visibility = View.GONE
-
-        overlayView.clear()
-        scope.coroutineContext.cancelChildren()
-        detectionSpeaker.stop()
-        showGlassIcon()
-        voiceResponder.speak("Đã ngắt kết nối")
+        cameraViewManager.showGlassIcon()
+        scope.coroutineContext.cancelChildren() // Dừng frame loop
+        detectionSpeaker?.stop()
+        voiceResponder?.speak("Đã ngắt kết nối")
     }
 
-    private fun showWebView() {
-        val settings = webView.settings
-        settings.javaScriptEnabled = true
-        settings.domStorageEnabled = true
-        settings.loadsImagesAutomatically = true
-        settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-        webView.webViewClient = WebViewClient()
-
-        webView.visibility = View.VISIBLE
-        glassIcon.visibility = View.GONE
-    }
-
-    private fun showGlassIcon() {
-        webView.visibility = View.GONE
-        glassIcon.visibility = View.VISIBLE
-        overlayView.clear()
-    }
-
+    /**
+     * Vòng lặp liên tục:
+     * - Lấy frame từ ESP32 (qua HTTP capture endpoint).
+     * - Decode thành Bitmap.
+     * - Gửi qua DetectionManager để YOLO detect.
+     *
+     * Chạy trong coroutine IO -> tránh block UI.
+     */
     private fun startFrameLoop() {
         scope.launch {
-            while (isESP32Connected) {
+            while (xiaoCamManager.isConnected) {
                 try {
-                    val url = URL(buildESP32Url("capture"))
+                    val url = URL(xiaoCamManager.buildUrl("capture"))
                     val conn = url.openConnection() as HttpURLConnection
                     conn.connectTimeout = 3000
                     conn.readTimeout = 3000
+
+                    // Đọc frame từ stream
                     val bitmap = BitmapFactory.decodeStream(conn.inputStream)
                     conn.disconnect()
 
-                    bitmap?.let {
-                        val scaled = Bitmap.createScaledBitmap(it, 224, 224, true)
-                        detector?.detect(scaled)
-                    }
+                    // Gửi frame cho YOLO detect
+                    bitmap?.let { detectionManager?.detectFrame(it) }
+
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }
-                delay(500)
+                delay(500) // Nhận frame mỗi 500ms (giảm tải CPU)
             }
         }
     }
 
+    /**
+     * Giải phóng tài nguyên khi fragment bị destroy.
+     */
     override fun onDestroyView() {
         super.onDestroyView()
-        webView.apply {
-            stopLoading()
-            clearHistory()
-            loadUrl("about:blank")
-            removeAllViews()
-            destroy()
-        }
+        cameraViewManager.release()
         requestQueue.cancelAll { true }
         scope.cancel()
-        detector?.close()
-        detectionSpeaker.stop()
-        voiceResponder.shutdown()
+        detectionManager?.release()
+        detectionSpeaker?.stop()
+        voiceResponder?.shutdown()
     }
 
     companion object {
         private const val PREFS_NAME = "app_settings"
-        private const val KEY_ESP32_IP = "esp32_ip"
-        private const val KEY_AUTO_CONNECT = "auto_connect"
+        private const val KEY_XIAOCAM_IP = "xiaocam_ip"
         private const val DEFAULT_IP = "192.168.4.1"
     }
 }

@@ -56,7 +56,7 @@ class Detector(
         labels.addAll(MetaData.extractNamesFromMetadata(model))
         if (labels.isEmpty()) {
             if (labelPath == null) {
-                message("Model not contains metadata, provide LABELS_PATH in Constants.kt")
+                message("Model not contains metadata")
                 labels.addAll(MetaData.TEMP_CLASSES)
             } else {
                 labels.addAll(MetaData.extractNamesFromLabelFile(context, labelPath))

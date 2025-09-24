@@ -9,7 +9,7 @@ import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
 import com.example.smartglass.R
 
-// Nhận giọng nói từ micro
+
 class VoiceRecognitionManager(
     private val context: Context,
     private val launcher: ActivityResultLauncher<Intent>
