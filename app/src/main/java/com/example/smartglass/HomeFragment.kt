@@ -43,7 +43,7 @@ class HomeFragment : Fragment() {
 
     // === UI components ===
     private lateinit var btnConnectXiaoCam: Button
-    private lateinit var requestQueue: RequestQueue      
+    private lateinit var requestQueue: RequestQueue
 
     private lateinit var cameraViewManager: CameraViewManager
     private lateinit var xiaoCamManager: XiaoCamManager
@@ -61,6 +61,12 @@ class HomeFragment : Fragment() {
             .getString(KEY_XIAOCAM_IP, DEFAULT_IP) ?: DEFAULT_IP
 
     // === Lifecycle ===
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        // Khởi tạo TTS sớm để lần nói đầu tiên không bị mất
+        voiceResponder = VoiceResponder(requireContext())
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
@@ -72,7 +78,6 @@ class HomeFragment : Fragment() {
         val overlayView = view.findViewById<OverlayView>(R.id.overlay)
         val webView = view.findViewById<android.webkit.WebView>(R.id.webViewCam)
 
-        // Khởi tạo manager quản lý giao diện camera
         cameraViewManager = CameraViewManager(webView, glassIcon, overlayView)
 
         return view
@@ -91,7 +96,6 @@ class HomeFragment : Fragment() {
             else connectToXiaoCam()
         }
     }
-
 
     private fun updateButtonState(textRes: Int, bgColor: String, enabled: Boolean) {
         btnConnectXiaoCam.apply {
@@ -112,11 +116,10 @@ class HomeFragment : Fragment() {
             detectionSpeaker = DetectionSpeaker(requireContext(), voiceResponder!!)
 
         if (detectionManager == null) {
-            // Manager gọi HuggingFace API (fallback khi YOLO không nhận diện)
-            val apiManager = ApiDetectionManager(
-                requireContext(),
-                apiToken = "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"
-            )
+            // Manager gọi server local (fallback khi YOLO không nhận diện)
+            val apiManager = ApiDetectionManager(requireContext())
+
+
             // DetectionManager chính (YOLO + tracking + speaker + API fallback)
             detectionManager = DetectionManager(
                 requireContext(),

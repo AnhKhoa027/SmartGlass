@@ -107,23 +107,49 @@ class DetectionManager(
                 if (apiResults.isEmpty()) {
                     val now = System.currentTimeMillis()
                     if (now - lastUnknownSpeakTime > unknownSpeakInterval) {
-                        detectionSpeaker.speak("Không thể xác định được vật, hãy tạm thời đứng yên")
+                        detectionSpeaker.speak("A Pi AI Không thể xác định được vật")
                         lastUnknownSpeakTime = now
                     }
                 } else {
-                    val labels = apiResults.joinToString { it.label }
+                    // Convert từ BoundingBoxAPI -> BoundingBox của bạn
+                    val boxes = apiResults.map { apiBox ->
+                        val x1 = apiBox.x
+                        val y1 = apiBox.y
+                        val x2 = apiBox.x + apiBox.w
+                        val y2 = apiBox.y + apiBox.h
+                        BoundingBox(
+                            x1 = x1,
+                            y1 = y1,
+                            x2 = x2,
+                            y2 = y2,
+                            cx = x1 + apiBox.w / 2f,
+                            cy = y1 + apiBox.h / 2f,
+                            w = apiBox.w,
+                            h = apiBox.h,
+                            cnf = apiBox.score,
+                            cls = -1,                // API không có id class
+                            clsName = apiBox.label   // tên object
+                        )
+                    }
+
+                    // Vẽ overlay bằng boxes
+                    cameraViewManager.setOverlayResults(boxes)
+
+                    // Đọc nhãn
+                    val labels = boxes.joinToString { it.clsName }
                     detectionSpeaker.speak("Phát hiện: $labels")
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
                 val now = System.currentTimeMillis()
                 if (now - lastUnknownSpeakTime > unknownSpeakInterval) {
-                    detectionSpeaker.speak("Không thể xác định được vật, hãy tạm thời đứng yên")
+                    detectionSpeaker.speak("Lỗi, Không thể xác định được vật")
                     lastUnknownSpeakTime = now
                 }
             }
         }
     }
+
 
 
     fun release() {

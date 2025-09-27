@@ -2,6 +2,7 @@ package com.example.smartglass
 
 import android.os.Bundle
 import android.speech.RecognizerIntent
+import android.util.Log
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
@@ -10,28 +11,11 @@ import androidx.fragment.app.Fragment
 import com.example.smartglass.TTSandSTT.VoiceCommandProcessor
 import com.example.smartglass.TTSandSTT.VoiceRecognitionManager
 import com.example.smartglass.TTSandSTT.VoiceResponder
+import com.example.smartglass.TTSandSTT.WakeWordManager
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.android.material.floatingactionbutton.FloatingActionButton
+import java.io.File
 
-/**
- * MainActivity
- * -------------------
- * Đây là Activity chính của ứng dụng:
- * - Chứa navigation (BottomNavigationView) để chuyển giữa HomeFragment và SettingFragment.
- * - Chứa mic button (FloatingActionButton) để nhận lệnh giọng nói.
- * - Tích hợp VoiceResponder (TTS), VoiceRecognitionManager (STT) và VoiceCommandProcessor (xử lý lệnh).
- *
- * Luồng chính:
- * - Khi người dùng bấm mic -> VoiceRecognitionManager bật RecognizerIntent -> trả về text.
- * - VoiceCommandProcessor phân tích text và gọi lệnh tương ứng (connect, disconnect, mở tab Home/Setting...).
- * - Các lệnh connect/disconnect được gửi sang HomeFragment (gọi connectToXiaoCam() / disconnectFromXiaoCam()).
- *
- * Liên quan:
- * - HomeFragment (gọi connect/disconnect camera).
- * - VoiceCommandProcessor.kt (xử lý logic lệnh).
- * - VoiceRecognitionManager.kt (nhận diện giọng nói).
- * - VoiceResponder.kt (phát phản hồi TTS).
- */
 class MainActivity : AppCompatActivity() {
 
     private lateinit var bottomNavigationView: BottomNavigationView
@@ -39,13 +23,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var voiceCommandProcessor: VoiceCommandProcessor
     private lateinit var voiceResponder: VoiceResponder
     private lateinit var voiceRecognitionManager: VoiceRecognitionManager
+    private var wakeWordManager: WakeWordManager? = null
 
     private var greeted = false
 
-    /**
-     * Launcher cho RecognizerIntent (STT).
-     * Khi nhận được kết quả từ Google Speech -> chuyển cho VoiceCommandProcessor xử lý.
-     */
     private val voiceRecognitionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -64,10 +45,9 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // Đọc trạng thái chào mừng lần đầu
         greeted = savedInstanceState?.getBoolean("greeted") ?: false
 
-        // Xử lý insets cho notch, status bar
+        // Xử lý insets
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
@@ -79,7 +59,7 @@ class MainActivity : AppCompatActivity() {
             .replace(R.id.frame_layout, HomeFragment())
             .commit()
 
-        // Khởi tạo BottomNavigationView để chuyển giữa Home / Setting
+        // BottomNavigationView
         bottomNavigationView = findViewById(R.id.bottom_navigation_view)
         bottomNavigationView.setOnItemSelectedListener { item ->
             val selectedFragment: Fragment = when (item.itemId) {
@@ -93,34 +73,65 @@ class MainActivity : AppCompatActivity() {
             true
         }
 
-        // FloatingActionButton (mic) để nhận lệnh giọng nói
+        // FloatingActionButton mic
         fabMic = findViewById(R.id.fabMic)
 
-        // Khởi tạo TTS responder
+        // TTS
         voiceResponder = VoiceResponder(this)
 
-        // Khởi tạo STT manager
+        // STT
         voiceRecognitionManager = VoiceRecognitionManager(this, voiceRecognitionLauncher)
 
-        // Khởi tạo processor để xử lý lệnh
+        // VoiceCommandProcessor
         voiceCommandProcessor = VoiceCommandProcessor(
             context = this,
             activity = this,
             bottomNav = bottomNavigationView,
-            onConnect = { sendCommandToHomeFragment(connect = true) },   // lệnh "connect"
-            onDisconnect = { sendCommandToHomeFragment(connect = false) }, // lệnh "disconnect"
-            voiceResponder = { voiceResponder.speak(it) } // callback TTS
+            onConnect = { sendCommandToHomeFragment(connect = true) },
+            onDisconnect = { sendCommandToHomeFragment(connect = false) },
+            voiceResponder = { voiceResponder.speak(it) }
         )
 
-        // Khi nhấn mic -> bắt đầu nghe
-        fabMic.setOnClickListener {
-            voiceRecognitionManager.startListening()
-        }
+        // Mic click
+        fabMic.setOnClickListener { voiceRecognitionManager.startListening() }
 
         // Lời chào lần đầu
         if (!greeted) {
             voiceResponder.speak(getString(R.string.voice_greeting))
             greeted = true
+        }
+
+        // --- Setup Wake Word ---
+        setupWakeWord()
+    }
+
+    private fun setupWakeWord() {
+        try {
+            // Copy file ppn từ assets nếu chưa có
+            val keywordFile = File(filesDir, "Hey-bro_en_android_v3_0_0.ppn")
+            if (!keywordFile.exists()) {
+                assets.open("Hey-bro_en_android_v3_0_0.ppn").use { input ->
+                    keywordFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                Log.d("WakeWord", "Copied new keyword file to ${keywordFile.absolutePath}")
+            }
+
+            wakeWordManager = WakeWordManager(
+                context = this,
+                accessKey = "LBKWPv6jiRpVsjkJp9wmYWhiv/H1dTxzzu6eQpOd++WZNm7kHMPUbw==",
+                keywordFile = keywordFile.absolutePath,
+                sensitivity = 0.6f
+            ) {
+                voiceResponder.speak("Tôi đang nghe...")
+                voiceRecognitionManager.startListening()
+            }
+
+            wakeWordManager?.startListening()
+        } catch (e: Exception) {
+            e.printStackTrace()
+            voiceResponder.speak("Không thể khởi tạo wake word, kiểm tra file ppn")
         }
     }
 
@@ -129,25 +140,26 @@ class MainActivity : AppCompatActivity() {
         outState.putBoolean("greeted", greeted)
     }
 
-    /**
-     * Gửi lệnh connect/disconnect xuống HomeFragment.
-     * HomeFragment có 2 hàm: connectToXiaoCam() / disconnectFromXiaoCam().
-     *
-     * -> Khi VoiceCommandProcessor nhận lệnh "kết nối" -> gọi connectToXiaoCam().
-     * -> Khi VoiceCommandProcessor nhận lệnh "ngắt kết nối" -> gọi disconnectFromXiaoCam().
-     */
     private fun sendCommandToHomeFragment(connect: Boolean) {
-        val currentFragment =
-            supportFragmentManager.findFragmentById(R.id.frame_layout) as? HomeFragment
+        val currentFragment = supportFragmentManager.findFragmentById(R.id.frame_layout) as? HomeFragment
         currentFragment?.let {
-            if (connect) it.connectToXiaoCam()
-            else it.disconnectFromXiaoCam()
+            if (connect) it.connectToXiaoCam() else it.disconnectFromXiaoCam()
         }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        wakeWordManager?.stopListening()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        wakeWordManager?.startListening()
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        // Giải phóng TTS khi thoát Activity
         voiceResponder.shutdown()
+        wakeWordManager?.stopListening()
     }
 }

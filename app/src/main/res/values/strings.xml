@@ -20,7 +20,7 @@
     <string name="voice_prompt">Hãy nói lệnh...</string>
 
     <!-- Phản hồi -->
-    <string name="voice_greeting">Chào bạn đến với SmartGlass. Hãy bấm mic ở góc dưới màn hình để ra lệnh.</string>
+    <string name="voice_greeting">Chào bạn đến với SmartGlass.</string>
     <string name="voice_not_supported">Thiết bị không hỗ trợ giọng nói</string>
     <string name="voice_not_understood">Xin lỗi, tôi không hiểu lệnh của bạn</string>
     <string name="voice_connection_failed">Kết nối thất bại. Vui lòng thử lại.</string>

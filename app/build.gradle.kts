@@ -52,8 +52,7 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.6.1")
 
 
-    implementation(group = "com.alphacephei", name = "vosk-android", version = "0.3.32+")
-
+    implementation("ai.picovoice:porcupine-android:3.0.0")
     implementation("org.tensorflow:tensorflow-lite:2.16.1")
     implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
     implementation("org.tensorflow:tensorflow-lite-gpu-delegate-plugin:0.4.4")
