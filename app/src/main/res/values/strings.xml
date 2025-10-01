@@ -1,6 +1,6 @@
 <resources>
     <!-- UI -->
-    <string name="app_name">SmartGlass</string>
+    <string name="app_name">Kính thông minh</string>
     <string name="voice_input">Voice input</string>
     <string name="smart_glass">Kính thông minh</string>
     <string name="glass_image">Biểu tượng Kính thông minh</string>

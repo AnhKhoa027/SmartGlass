@@ -1,10 +1,14 @@
 package com.example.smartglass
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.speech.RecognizerIntent
 import android.util.Log
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
@@ -12,9 +16,9 @@ import com.example.smartglass.TTSandSTT.VoiceCommandProcessor
 import com.example.smartglass.TTSandSTT.VoiceRecognitionManager
 import com.example.smartglass.TTSandSTT.VoiceResponder
 import com.example.smartglass.TTSandSTT.WakeWordManager
+import com.example.smartglass.HomeAction.GestureActionManager
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.android.material.floatingactionbutton.FloatingActionButton
-import java.io.File
 
 class MainActivity : AppCompatActivity() {
 
@@ -26,6 +30,7 @@ class MainActivity : AppCompatActivity() {
     private var wakeWordManager: WakeWordManager? = null
 
     private var greeted = false
+    private val REQUEST_CODE_MIC = 1001
 
     private val voiceRecognitionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -79,6 +84,47 @@ class MainActivity : AppCompatActivity() {
         // TTS
         voiceResponder = VoiceResponder(this)
 
+        // Xin quyền micro
+        checkMicPermission()
+    }
+
+    /**
+     * Kiểm tra & xin quyền Micro
+     */
+    private fun checkMicPermission() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.RECORD_AUDIO),
+                REQUEST_CODE_MIC
+            )
+        } else {
+            initVoiceFeatures()
+        }
+    }
+
+    /**
+     * Callback kết quả xin quyền
+     */
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQUEST_CODE_MIC) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                voiceResponder.speak("Đã cấp quyền micro, tôi sẵn sàng.")
+                initVoiceFeatures()
+            } else {
+                voiceResponder.speak("Bạn cần cấp quyền micro để dùng giọng nói.")
+            }
+        }
+    }
+
+    private fun initVoiceFeatures() {
         // STT
         voiceRecognitionManager = VoiceRecognitionManager(this, voiceRecognitionLauncher)
 
@@ -103,35 +149,29 @@ class MainActivity : AppCompatActivity() {
 
         // --- Setup Wake Word ---
         setupWakeWord()
+
+        // --- Setup Gesture giữ tay ≥ 5s ---
+        val gestureManager = GestureActionManager(
+            rootView = findViewById(R.id.main),
+            onHoldScreen = {
+                voiceResponder.speak("Bắt đầu nghe...")
+                voiceRecognitionManager.startListening()
+            }
+        )
+        gestureManager.init()
     }
 
     private fun setupWakeWord() {
-        try {
-            // Copy file ppn từ assets nếu chưa có
-            val keywordFile = File(filesDir, "Hey-bro_en_android_v3_0_0.ppn")
-            if (!keywordFile.exists()) {
-                assets.open("Hey-bro_en_android_v3_0_0.ppn").use { input ->
-                    keywordFile.outputStream().use { output ->
-                        input.copyTo(output)
-                    }
-                }
-                Log.d("WakeWord", "Copied new keyword file to ${keywordFile.absolutePath}")
-            }
-
-            wakeWordManager = WakeWordManager(
-                context = this,
-                accessKey = "LBKWPv6jiRpVsjkJp9wmYWhiv/H1dTxzzu6eQpOd++WZNm7kHMPUbw==",
-                keywordFile = keywordFile.absolutePath,
-                sensitivity = 0.6f
-            ) {
+        wakeWordManager = WakeWordManager.createAndInit(
+            context = this,
+            accessKey = "LBKWPv6jiRpVsjkJp9wmYWhiv/H1dTxzzu6eQpOd++WZNm7kHMPUbw==",
+            onWakeWordDetected = {
                 voiceResponder.speak("Tôi đang nghe...")
                 voiceRecognitionManager.startListening()
             }
-
-            wakeWordManager?.startListening()
-        } catch (e: Exception) {
-            e.printStackTrace()
+        ) ?: run {
             voiceResponder.speak("Không thể khởi tạo wake word, kiểm tra file ppn")
+            null
         }
     }
 

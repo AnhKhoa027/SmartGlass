@@ -13,7 +13,7 @@ import java.util.UUID
 
 class ApiDetectionManager(
     private val context: Context,
-    private val apiUrl: String = "http://192.168.1.10:8000/predict" // server local
+    private val apiUrl: String = "http://192.168.1.8:8000/predict" // server local
 ) {
     data class BoundingBoxAPI(
         val label: String,

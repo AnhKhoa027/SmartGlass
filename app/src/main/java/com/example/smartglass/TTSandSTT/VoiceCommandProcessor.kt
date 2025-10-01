@@ -17,7 +17,6 @@ class VoiceCommandProcessor(
     fun handleCommand(command: String) {
         when {
             command.contains("kết nối", ignoreCase = true) -> {
-                voiceResponder("Đang kết nối thiết bị")
                 onConnect()
             }
 

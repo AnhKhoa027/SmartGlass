@@ -216,6 +216,6 @@ class HomeFragment : Fragment() {
     companion object {
         private const val PREFS_NAME = "app_settings"
         private const val KEY_XIAOCAM_IP = "xiaocam_ip"
-        private const val DEFAULT_IP = "192.168.4.1"
+        private const val DEFAULT_IP = "192.168.255.114"
     }
 }
