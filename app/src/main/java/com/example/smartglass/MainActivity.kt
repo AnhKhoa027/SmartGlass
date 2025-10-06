@@ -4,7 +4,6 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.speech.RecognizerIntent
-import android.util.Log
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -59,18 +58,31 @@ class MainActivity : AppCompatActivity() {
             insets
         }
 
-        // Load mặc định HomeFragment
+        // Khởi tạo TTS duy nhất
+        voiceResponder = VoiceResponder(this)
+
+        // Load mặc định HomeFragment và truyền VoiceResponder
+        val homeFragment = HomeFragment()
+        homeFragment.setVoiceResponder(voiceResponder)
         supportFragmentManager.beginTransaction()
-            .replace(R.id.frame_layout, HomeFragment())
+            .replace(R.id.frame_layout, homeFragment)
             .commit()
 
         // BottomNavigationView
         bottomNavigationView = findViewById(R.id.bottom_navigation_view)
         bottomNavigationView.setOnItemSelectedListener { item ->
             val selectedFragment: Fragment = when (item.itemId) {
-                R.id.home -> HomeFragment()
+                R.id.home -> {
+                    val frag = HomeFragment()
+                    frag.setVoiceResponder(voiceResponder)
+                    frag
+                }
                 R.id.setting -> SettingFragment()
-                else -> HomeFragment()
+                else -> {
+                    val frag = HomeFragment()
+                    frag.setVoiceResponder(voiceResponder)
+                    frag
+                }
             }
             supportFragmentManager.beginTransaction()
                 .replace(R.id.frame_layout, selectedFragment)
@@ -81,16 +93,10 @@ class MainActivity : AppCompatActivity() {
         // FloatingActionButton mic
         fabMic = findViewById(R.id.fabMic)
 
-        // TTS
-        voiceResponder = VoiceResponder(this)
-
         // Xin quyền micro
         checkMicPermission()
     }
 
-    /**
-     * Kiểm tra & xin quyền Micro
-     */
     private fun checkMicPermission() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED
@@ -105,9 +111,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Callback kết quả xin quyền
-     */
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<out String>,
@@ -125,32 +128,26 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun initVoiceFeatures() {
-        // STT
         voiceRecognitionManager = VoiceRecognitionManager(this, voiceRecognitionLauncher)
 
-        // VoiceCommandProcessor
         voiceCommandProcessor = VoiceCommandProcessor(
             context = this,
             activity = this,
             bottomNav = bottomNavigationView,
-            onConnect = { sendCommandToHomeFragment(connect = true) },
-            onDisconnect = { sendCommandToHomeFragment(connect = false) },
+            onConnect = { callback -> sendCommandToHomeFragment(connect = true, callback) },
+            onDisconnect = { callback -> sendCommandToHomeFragment(connect = false, callback) },
             voiceResponder = { voiceResponder.speak(it) }
         )
 
-        // Mic click
         fabMic.setOnClickListener { voiceRecognitionManager.startListening() }
 
-        // Lời chào lần đầu
         if (!greeted) {
             voiceResponder.speak(getString(R.string.voice_greeting))
             greeted = true
         }
 
-        // --- Setup Wake Word ---
         setupWakeWord()
 
-        // --- Setup Gesture giữ tay ≥ 5s ---
         val gestureManager = GestureActionManager(
             rootView = findViewById(R.id.main),
             onHoldScreen = {
@@ -180,10 +177,10 @@ class MainActivity : AppCompatActivity() {
         outState.putBoolean("greeted", greeted)
     }
 
-    private fun sendCommandToHomeFragment(connect: Boolean) {
+    private fun sendCommandToHomeFragment(connect: Boolean, callback: (Boolean) -> Unit) {
         val currentFragment = supportFragmentManager.findFragmentById(R.id.frame_layout) as? HomeFragment
         currentFragment?.let {
-            if (connect) it.connectToXiaoCam() else it.disconnectFromXiaoCam()
+            if (connect) it.connectToXiaoCam(callback) else it.disconnectFromXiaoCam(callback)
         }
     }
 

@@ -28,12 +28,13 @@
         android:layout_centerHorizontal="true"
         android:layout_marginTop="30dp">
 
-        <!-- WebView hiển thị luồng ESP32-CAM -->
-        <WebView
-            android:id="@+id/webViewCam"
+        <!-- ImageView hiển thị frame từ ESP32 WebSocket -->
+        <TextureView
+            android:id="@+id/camera_view"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:visibility="gone" />
+            android:visibility="gone"
+            android:scaleType="fitXY" />
 
         <!-- Overlay YOLO -->
         <com.example.smartglass.ObjectDetection.OverlayView
@@ -51,6 +52,16 @@
             android:contentDescription="@string/glass_image"
             android:visibility="visible" />
     </FrameLayout>
+
+    <TextView
+        android:id="@+id/tvCameraIp"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="IP: --"
+        android:textSize="20sp"
+        android:layout_below="@id/cam_container"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="10dp"/>
 
     <!-- Tên thiết bị -->
     <TextView

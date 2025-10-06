@@ -9,21 +9,43 @@ class VoiceCommandProcessor(
     private val context: Context,
     private val activity: FragmentActivity,
     private val bottomNav: BottomNavigationView,
-    private val onConnect: () -> Unit,
-    private val onDisconnect: () -> Unit,
+    private val onConnect: (callback: (Boolean) -> Unit) -> Unit,
+    private val onDisconnect: (callback: (Boolean) -> Unit) -> Unit,
     private val voiceResponder: (String) -> Unit
 ) {
-    //Các câu lệnh xử lý
+    private var isConnected = false
+
     fun handleCommand(command: String) {
         when {
-            command.contains("kết nối", ignoreCase = true) -> {
-                onConnect()
-            }
-
             command.contains("hủy kết nối", ignoreCase = true) ||
                     command.contains("ngắt kết nối", ignoreCase = true) -> {
-                voiceResponder("Đã hủy kết nối thiết bị")
-                onDisconnect()
+                if (isConnected) {
+                    onDisconnect { success ->
+                        if (success) {
+                            isConnected = false
+                            voiceResponder("Đã hủy kết nối thiết bị")
+                        } else {
+                            voiceResponder("Hủy kết nối thất bại, thử lại")
+                        }
+                    }
+                } else {
+                    voiceResponder("Thiết bị chưa kết nối")
+                }
+            }
+            command.contains("kết nối", ignoreCase = true) -> {
+                if (!isConnected) {
+                    onConnect { success ->
+                        if (success) {
+                            isConnected = true
+                            voiceResponder("Đã kết nối thiết bị")
+                        } else {
+                            isConnected = false
+                            voiceResponder("Kết nối thất bại, thử lại")
+                        }
+                    }
+                } else {
+                    voiceResponder("Thiết bị đã kết nối sẵn rồi")
+                }
             }
 
             command.contains("tắt mic", ignoreCase = true) ||

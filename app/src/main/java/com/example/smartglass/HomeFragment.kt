@@ -1,11 +1,11 @@
 package com.example.smartglass
 
 import android.content.Context
-import android.graphics.BitmapFactory
 import android.os.Bundle
 import android.view.*
 import android.widget.Button
 import android.widget.ImageView
+import android.widget.TextView
 import android.widget.Toast
 import androidx.core.graphics.toColorInt
 import androidx.fragment.app.Fragment
@@ -14,57 +14,41 @@ import com.android.volley.toolbox.Volley
 import com.example.smartglass.DetectResponse.DetectionSpeaker
 import com.example.smartglass.ObjectDetection.OverlayView
 import com.example.smartglass.TTSandSTT.VoiceResponder
-import com.example.smartglass.HomeAction.*
+import com.example.smartglass.HomeAction.CameraViewManager
+import com.example.smartglass.HomeAction.DetectionManager
+import com.example.smartglass.HomeAction.ApiDetectionManager
+import com.example.smartglass.HomeAction.FirebaseHelperOnDemand
 import kotlinx.coroutines.*
-import java.net.HttpURLConnection
-import java.net.URL
 
-/**
- * HomeFragment
- * -------------------
- * Đây là **màn hình chính** hiển thị camera stream và xử lý logic kết nối với
- * camera Xiao ESP32S3 + YOLO + API fallback.
- *
- * Nhiệm vụ:
- * - Quản lý nút kết nối/ngắt kết nối (btnConnectXiaoCam).
- * - Dùng XiaoCamManager để kết nối tới camera ESP32.
- * - Dùng CameraViewManager để hiển thị stream qua WebView + overlay bounding box.
- * - Khởi tạo DetectionManager để chạy YOLO detect, tracking, phát hiện giọng nói.
- * - Nếu YOLO không nhận diện được thì gọi ApiDetectionManager (HuggingFace API).
- * - Vòng lặp `startFrameLoop()` liên tục tải frame từ camera -> detect.
- *
- * Liên quan:
- * - XiaoCamManager.kt : xử lý connect/disconnect tới ESP32S3
- * - CameraViewManager.kt : vẽ icon kính / stream / overlay box
- * - DetectionManager.kt : YOLO detect + tracking + TTS speaker
- * - ApiDetectionManager.kt : fallback gọi API HuggingFace khi YOLO không nhận diện
- */
 class HomeFragment : Fragment() {
 
-    // === UI components ===
     private lateinit var btnConnectXiaoCam: Button
+    private lateinit var tvCameraIp: TextView
     private lateinit var requestQueue: RequestQueue
 
     private lateinit var cameraViewManager: CameraViewManager
-    private lateinit var xiaoCamManager: XiaoCamManager
+    private lateinit var textureViewCam: TextureView
+    private lateinit var glassIcon: ImageView
+    private lateinit var overlayView: OverlayView
 
-    // === Detection & Voice ===
     private var detectionManager: DetectionManager? = null
-    private var voiceResponder: VoiceResponder? = null
     private var detectionSpeaker: DetectionSpeaker? = null
+    private var voiceResponder: VoiceResponder? = null
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private lateinit var firebaseHelper: FirebaseHelperOnDemand
+
+    private var currentIp: String? = null
+    private var isConnected = false
 
     private val xiaoCamIp: String
-        get() = requireContext()
-            .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getString(KEY_XIAOCAM_IP, DEFAULT_IP) ?: DEFAULT_IP
+        get() = currentIp
+            ?: requireContext()
+                .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getString(KEY_XIAOCAM_IP, DEFAULT_IP) ?: DEFAULT_IP
 
-    // === Lifecycle ===
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        // Khởi tạo TTS sớm để lần nói đầu tiên không bị mất
-        voiceResponder = VoiceResponder(requireContext())
+    fun setVoiceResponder(vr: VoiceResponder) {
+        voiceResponder = vr
     }
 
     override fun onCreateView(
@@ -74,13 +58,33 @@ class HomeFragment : Fragment() {
         val view = inflater.inflate(R.layout.fragment_home, container, false)
 
         btnConnectXiaoCam = view.findViewById(R.id.btnConnect)
-        val glassIcon = view.findViewById<ImageView>(R.id.glass_icon)
-        val overlayView = view.findViewById<OverlayView>(R.id.overlay)
-        val webView = view.findViewById<android.webkit.WebView>(R.id.webViewCam)
+        tvCameraIp = view.findViewById(R.id.tvCameraIp)
+        textureViewCam = view.findViewById(R.id.camera_view)
+        glassIcon = view.findViewById(R.id.glass_icon)
+        overlayView = view.findViewById(R.id.overlay)
 
-        cameraViewManager = CameraViewManager(webView, glassIcon, overlayView)
+        cameraViewManager = CameraViewManager(textureViewCam, glassIcon, overlayView)
+        firebaseHelper = FirebaseHelperOnDemand()
+
+        fetchCameraIpFromFirebase()
 
         return view
+    }
+
+    private fun fetchCameraIpFromFirebase() {
+        firebaseHelper.fetchCameraIp { ip ->
+            activity?.runOnUiThread {
+                if (!ip.isNullOrEmpty()) {
+                    currentIp = ip
+                    tvCameraIp.text = "IP: $ip"
+                    requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                        .edit().putString(KEY_XIAOCAM_IP, ip).apply()
+                } else {
+                    tvCameraIp.text = "IP: --"
+                    voiceResponder?.speak("Chưa có IP camera trong Firebase")
+                }
+            }
+        }
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -88,13 +92,16 @@ class HomeFragment : Fragment() {
 
         requestQueue = Volley.newRequestQueue(requireContext())
 
-        xiaoCamManager = XiaoCamManager(requireContext(), requestQueue) { xiaoCamIp }
-
-        // Set sự kiện click cho nút Connect/Disconnect
         btnConnectXiaoCam.setOnClickListener {
-            if (xiaoCamManager.isConnected) disconnectFromXiaoCam()
-            else connectToXiaoCam()
+            if (isConnected) {
+                disconnectFromXiaoCam()
+            } else {
+                if (currentIp != null) connectToXiaoCam()
+                else Toast.makeText(context, "Chưa lấy được IP camera", Toast.LENGTH_SHORT).show()
+            }
         }
+
+        updateButtonState(R.string.connect, "#2F58C3", true)
     }
 
     private fun updateButtonState(textRes: Int, bgColor: String, enabled: Boolean) {
@@ -105,104 +112,64 @@ class HomeFragment : Fragment() {
         }
     }
 
-    /**
-     * Đảm bảo các manager (YOLO, Speaker, API) được khởi tạo 1 lần sau khi connect.
-     */
     private fun ensureManagers() {
-        if (voiceResponder == null)
-            voiceResponder = VoiceResponder(requireContext())
+        if (voiceResponder == null) return
 
         if (detectionSpeaker == null)
             detectionSpeaker = DetectionSpeaker(requireContext(), voiceResponder!!)
 
-        if (detectionManager == null) {
-            // Manager gọi server local (fallback khi YOLO không nhận diện)
-            val apiManager = ApiDetectionManager(requireContext())
-
-
-            // DetectionManager chính (YOLO + tracking + speaker + API fallback)
-            detectionManager = DetectionManager(
-                requireContext(),
-                cameraViewManager,
-                detectionSpeaker!!,
-                apiManager,
-                scope
-            )
-        }
+//        if (detectionManager == null) {
+//            val apiManager = ApiDetectionManager(requireContext())
+//            detectionManager = DetectionManager(
+//                requireContext(),
+//                cameraViewManager,
+//                detectionSpeaker!!,
+//                apiManager,
+//                scope
+//            )
+//        } else {
+//            detectionManager?.lastFrame = null // reset bitmap cũ khi reconnect
+//        }
     }
 
-    /**
-     * Thực hiện kết nối tới camera Xiao ESP32S3
-     */
-    fun connectToXiaoCam() {
+    fun connectToXiaoCam(callback: ((Boolean) -> Unit)? = null) {
         updateButtonState(R.string.connecting, "#808080", false)
         voiceResponder?.speak("Đang kết nối với kính")
 
-        xiaoCamManager.connect(
-            onSuccess = {
-                ensureManagers()
-                updateButtonState(R.string.connected, "#4CAF50", true)
-                cameraViewManager.showWebView(xiaoCamIp)   // Hiển thị stream
-                startFrameLoop()                          // Bắt đầu vòng lặp nhận frame
-                voiceResponder?.speak("Kết nối thành công")
+        ensureManagers()
+
+        cameraViewManager.showStream(xiaoCamIp, detectionManager,
+            onConnected = {
+                activity?.runOnUiThread {
+                    isConnected = true
+                    updateButtonState(R.string.connected, "#4CAF50", true)
+                    voiceResponder?.speak("Kết nối thành công")
+                    callback?.invoke(true)
+                }
             },
-            onFailure = {
-                Toast.makeText(context, R.string.connect_failed, Toast.LENGTH_SHORT).show()
-                updateButtonState(R.string.connect, "#2F58C3", true)
-                cameraViewManager.showGlassIcon()
-                voiceResponder?.speak("Kết nối thất bại")
+            onFailed = {
+                activity?.runOnUiThread {
+                    isConnected = false
+                    updateButtonState(R.string.connect, "#2F58C3", true)
+                    cameraViewManager.showGlassIcon()
+                    voiceResponder?.speak("Kết nối thất bại")
+                    callback?.invoke(false)
+                }
             }
         )
     }
 
-    /**
-     * Ngắt kết nối với camera ESP32S3
-     */
-    fun disconnectFromXiaoCam() {
-        xiaoCamManager.disconnect()
-        updateButtonState(R.string.connect, "#2F58C3", true)
-
-        cameraViewManager.showGlassIcon()
-        scope.coroutineContext.cancelChildren() // Dừng frame loop
+    fun disconnectFromXiaoCam(callback: ((Boolean) -> Unit)? = null) {
+        cameraViewManager.showGlassIcon() // sẽ release WS + clear canvas
         detectionSpeaker?.stop()
+        isConnected = false
+
+        updateButtonState(R.string.connect, "#2F58C3", true)
         voiceResponder?.speak("Đã ngắt kết nối")
+
+        callback?.invoke(true)
     }
 
-    /**
-     * Vòng lặp liên tục:
-     * - Lấy frame từ ESP32 (qua HTTP capture endpoint).
-     * - Decode thành Bitmap.
-     * - Gửi qua DetectionManager để YOLO detect.
-     *
-     * Chạy trong coroutine IO -> tránh block UI.
-     */
-    private fun startFrameLoop() {
-        scope.launch {
-            while (xiaoCamManager.isConnected) {
-                try {
-                    val url = URL(xiaoCamManager.buildUrl("capture"))
-                    val conn = url.openConnection() as HttpURLConnection
-                    conn.connectTimeout = 3000
-                    conn.readTimeout = 3000
-
-                    // Đọc frame từ stream
-                    val bitmap = BitmapFactory.decodeStream(conn.inputStream)
-                    conn.disconnect()
-
-                    // Gửi frame cho YOLO detect
-                    bitmap?.let { detectionManager?.detectFrame(it) }
-
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-                delay(500) // Nhận frame mỗi 500ms (giảm tải CPU)
-            }
-        }
-    }
-
-    /**
-     * Giải phóng tài nguyên khi fragment bị destroy.
-     */
     override fun onDestroyView() {
         super.onDestroyView()
         cameraViewManager.release()
@@ -210,7 +177,6 @@ class HomeFragment : Fragment() {
         scope.cancel()
         detectionManager?.release()
         detectionSpeaker?.stop()
-        voiceResponder?.shutdown()
     }
 
     companion object {
