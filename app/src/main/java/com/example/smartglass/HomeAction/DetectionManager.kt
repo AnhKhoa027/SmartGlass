@@ -7,14 +7,12 @@ import com.example.smartglass.DetectResponse.DetectionSpeaker
 import kotlinx.coroutines.*
 
 /**
- * DetectionManager
- * -------------------
- * Quản lý YOLO (Detector), tracking (ObjectTracker) và phát hiện giọng nói (DetectionSpeaker).
- * Tích hợp với CameraViewManager (WebSocket) cho real-time detection.
- *
- * - detectFrame(): nhận frame nền từ CameraViewManager và xử lý YOLO.
- * - Nếu YOLO không phát hiện gì → fallback API hoặc nói “vật không xác định”.
- * - Toàn bộ detect chạy trong coroutine IO (không block main thread).
+ * DetectionManager (Optimized)
+ * ----------------------------
+ * - Nhận frame từ CameraViewManager
+ * - Gọi YOLO detect trong background
+ * - Nếu không phát hiện → fallback API
+ * - Quản lý phát giọng nói và overlay
  */
 class DetectionManager(
     context: Context,
@@ -25,69 +23,58 @@ class DetectionManager(
 ) {
     private val tracker = ObjectTracker(maxObjects = 5, iouThreshold = 0.5f)
     var lastFrame: Bitmap? = null
+    private var isDetecting = false
+    private var lastUnknownSpeakTime = 0L
+    private val unknownSpeakInterval = 5000L // 5s
 
-    // Bộ xử lý YOLO
-    private val detector: Detector = Detector(
+    // YOLO Detector
+    private val detector = Detector(
         context = context,
         modelPath = "yolov8n_int8.tflite",
         labelPath = "example_label_file.txt",
         detectorListener = object : Detector.DetectorListener {
             override fun onEmptyDetect() {
-                // Không tìm thấy vật
                 cameraViewManager.setOverlayResults(emptyList())
                 fallbackApiLastFrame()
             }
 
             override fun onDetect(boundingBoxes: List<BoundingBox>, inferenceTime: Long) {
-                // Tracking + overlay + đọc tên vật
                 val tracked = tracker.update(boundingBoxes)
                 cameraViewManager.setOverlayResults(tracked.map { it.smoothBox })
 
+                val labels = tracked.joinToString { it.smoothBox.clsName }
                 detectionSpeaker.speakDetections(
                     tracked,
                     cameraViewManager.getOverlayWidth(),
                     cameraViewManager.getOverlayHeight()
                 )
+
+                println("✅ YOLO detect done in ${inferenceTime}ms → $labels")
             }
         },
-        message = { println(it) } // debug
+        message = { println("Detector: $it") }
     )
 
-    private var isDetecting = false
-    private var lastUnknownSpeakTime = 0L
-    private val unknownSpeakInterval = 5000L // 5 giây
-
-    /**
-     * detectFrame()
-     * --------------
-     * Nhận bitmap từ CameraViewManager (WebSocket stream),
-     * scale và gọi YOLO detect trong coroutine IO.
-     *
-     * @param bitmap ảnh đầu vào từ ESP32
-     */
+    /** Nhận frame từ camera và chạy detect */
     fun detectFrame(bitmap: Bitmap) {
-        if (isDetecting) return // bỏ qua frame nếu YOLO đang bận
+        if (isDetecting) return
         isDetecting = true
 
-        // Xử lý nền
+        lastFrame = bitmap
+
         scope.launch(Dispatchers.IO) {
             try {
-                val scaled = Bitmap.createScaledBitmap(bitmap, 224, 224, true)
-                detector.detect(scaled)
-                lastFrame = bitmap
+                detector.detect(bitmap)
             } catch (e: Exception) {
                 e.printStackTrace()
+                speakOnce("Lỗi khi xử lý vật thể.")
             } finally {
                 isDetecting = false
             }
         }
     }
 
-    /**
-     * fallbackApiLastFrame()
-     * -----------------------
-     * Gửi frame cuối cùng lên API (cloud detect) nếu YOLO không phát hiện gì.
-     */
+    /** Fallback API khi YOLO không phát hiện gì */
     private fun fallbackApiLastFrame() {
         val frame = lastFrame ?: return
         scope.launch(Dispatchers.IO) {
@@ -95,24 +82,16 @@ class DetectionManager(
                 val apiResults = apiDetectionManager.detectFrame(frame)
 
                 if (apiResults.isEmpty()) {
-                    val now = System.currentTimeMillis()
-                    if (now - lastUnknownSpeakTime > unknownSpeakInterval) {
-                        detectionSpeaker.speak("Không thể xác định vật thể.")
-                        lastUnknownSpeakTime = now
-                    }
+                    speakOnce("Không thể xác định vật thể.")
                 } else {
                     val boxes = apiResults.map { apiBox ->
-                        val x1 = apiBox.x
-                        val y1 = apiBox.y
-                        val x2 = apiBox.x + apiBox.w
-                        val y2 = apiBox.y + apiBox.h
                         BoundingBox(
-                            x1 = x1,
-                            y1 = y1,
-                            x2 = x2,
-                            y2 = y2,
-                            cx = x1 + apiBox.w / 2f,
-                            cy = y1 + apiBox.h / 2f,
+                            x1 = apiBox.x,
+                            y1 = apiBox.y,
+                            x2 = apiBox.x + apiBox.w,
+                            y2 = apiBox.y + apiBox.h,
+                            cx = apiBox.x + apiBox.w / 2f,
+                            cy = apiBox.y + apiBox.h / 2f,
                             w = apiBox.w,
                             h = apiBox.h,
                             cnf = apiBox.score,
@@ -125,20 +104,25 @@ class DetectionManager(
                         cameraViewManager.setOverlayResults(boxes)
                         val labels = boxes.joinToString { it.clsName }
                         detectionSpeaker.speak("Phát hiện: $labels")
+                        println("🌐 Fallback API detect → $labels")
                     }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-                val now = System.currentTimeMillis()
-                if (now - lastUnknownSpeakTime > unknownSpeakInterval) {
-                    detectionSpeaker.speak("Lỗi khi xác định vật thể.")
-                    lastUnknownSpeakTime = now
-                }
+                speakOnce("Lỗi khi xác định vật thể qua API.")
             }
         }
     }
 
-    /** Giải phóng tài nguyên */
+    /** Đảm bảo không lặp lại lời nói trong 5s */
+    private fun speakOnce(text: String) {
+        val now = System.currentTimeMillis()
+        if (now - lastUnknownSpeakTime > unknownSpeakInterval) {
+            detectionSpeaker.speak(text)
+            lastUnknownSpeakTime = now
+        }
+    }
+
     fun release() {
         detector.close()
         detectionSpeaker.stop()

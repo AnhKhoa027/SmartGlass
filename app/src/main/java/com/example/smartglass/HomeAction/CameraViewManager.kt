@@ -65,19 +65,19 @@ class CameraViewManager(
         ws = client.newWebSocket(request, object : WebSocketListener() {
 
             override fun onOpen(webSocket: WebSocket, response: Response) {
-                println("✅ WebSocket connected to ESP32 ($ip)")
+                println("WebSocket connected to ESP32 ($ip)")
                 isConnecting = false
                 onConnected?.invoke()
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                println("❌ WebSocket failure: ${t.message}")
+                println("WebSocket failure: ${t.message}")
                 isConnecting = false
                 onFailed?.invoke()
             }
 
             override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
-                println("⚠️ WebSocket closing: $reason")
+                println("⚠WebSocket closing: $reason")
                 webSocket.close(1000, null)
                 isConnecting = false
                 onFailed?.invoke()
@@ -92,7 +92,7 @@ class CameraViewManager(
 
                 scope.launch {
                     try {
-                        // Decode frame từ ESP32
+                        // Decode frame từ Xiao ESP32S3
                         val bitmap =
                             BitmapFactory.decodeStream(ByteArrayInputStream(bytes.toByteArray()))
                                 ?: return@launch

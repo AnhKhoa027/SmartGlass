@@ -151,7 +151,7 @@ class MainActivity : AppCompatActivity() {
         val gestureManager = GestureActionManager(
             rootView = findViewById(R.id.main),
             onHoldScreen = {
-                voiceResponder.speak("Bắt đầu nghe...")
+                voiceResponder.speak("Tôi đang nghe...")
                 voiceRecognitionManager.startListening()
             }
         )

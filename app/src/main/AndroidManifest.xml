@@ -18,7 +18,7 @@
 
         <!-- SplashActivity là màn hình đầu tiên khi khởi động app -->
         <activity
-            android:name="com.example.yourapp.SplashActivity"
+            android:name="com.example.smartglass.SplashActivity"
             android:exported="true"
             android:theme="@style/Theme.SmartGlass">
             <intent-filter>
@@ -30,7 +30,9 @@
         <!-- MainActivity hiển thị sau splash -->
         <activity
             android:name=".MainActivity"
-            android:exported="true" />
+            android:exported="true"
+            android:screenOrientation="portrait"
+            tools:ignore="LockedOrientationActivity"/>
     </application>
 
 </manifest>

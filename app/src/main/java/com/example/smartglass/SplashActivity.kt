@@ -1,4 +1,4 @@
-package com.example.yourapp
+package com.example.smartglass
 import com.example.smartglass.R
 import com.example.smartglass.MainActivity
 import android.content.Intent
