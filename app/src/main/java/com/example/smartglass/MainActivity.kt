@@ -131,7 +131,6 @@ class MainActivity : AppCompatActivity() {
         voiceRecognitionManager = VoiceRecognitionManager(this, voiceRecognitionLauncher)
 
         voiceCommandProcessor = VoiceCommandProcessor(
-            context = this,
             activity = this,
             bottomNav = bottomNavigationView,
             onConnect = { callback -> sendCommandToHomeFragment(connect = true, callback) },

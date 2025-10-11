@@ -1,17 +1,22 @@
 package com.example.smartglass.TTSandSTT
 
 import android.content.Context
+import android.media.AudioAttributes
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import android.util.Log
 import com.example.smartglass.MainActivity
+import com.example.smartglass.SettingAction.SettingsManager
 import java.util.*
 
 class VoiceResponder(private val context: Context) : TextToSpeech.OnInitListener {
+
     private lateinit var tts: TextToSpeech
     private var isReady = false
     private var pendingText: String? = null
     private var pendingCallback: (() -> Unit)? = null
+    private val settings = SettingsManager.getInstance(context)
 
     init {
         tts = TextToSpeech(context, this)
@@ -20,12 +25,23 @@ class VoiceResponder(private val context: Context) : TextToSpeech.OnInitListener
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
             tts.language = Locale.forLanguageTag("vi-VN")
+
+            tts.setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build()
+            )
+
             isReady = true
-            if (pendingText != null) {
-                speak(pendingText!!, pendingCallback)
-                pendingText = null
-                pendingCallback = null
-            }
+            Log.d("VoiceResponder", "Google TTS đã sẵn sàng")
+
+            // Nếu có văn bản chờ, đọc ngay sau khi init
+            pendingText?.let { speak(it, pendingCallback) }
+            pendingText = null
+            pendingCallback = null
+        } else {
+            Log.e("VoiceResponder", "TTS init failed: $status")
         }
     }
 
@@ -33,8 +49,11 @@ class VoiceResponder(private val context: Context) : TextToSpeech.OnInitListener
         if (!isReady) {
             pendingText = text
             pendingCallback = onDone
+            Log.w("VoiceResponder", "TTS chưa sẵn sàng, chờ khởi tạo")
             return
         }
+
+        val utteranceId = "utt_${System.currentTimeMillis()}"
 
         tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) {}
@@ -46,19 +65,22 @@ class VoiceResponder(private val context: Context) : TextToSpeech.OnInitListener
             }
         })
 
-        val prefs = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
-        val savedVolume = prefs.getInt("volume", 100).coerceIn(0, 100)
-        val volumeFloat = savedVolume / 100f
+        val volumeFloat = settings.getVolumeFloat()
+        val speed = settings.getSpeedMultiplier()
 
-        val params = Bundle().apply {
-            putFloat("volume", volumeFloat)
-        }
+        val params = Bundle().apply { putFloat("volume", volumeFloat) }
+        tts.setSpeechRate(speed)
+        tts.setPitch(1.0f)
 
-        tts.speak(text, TextToSpeech.QUEUE_FLUSH, params, "UTTERANCE_ID")
+        Log.d("VoiceResponder", "🗣️ Nói: $text (speed=$speed, volume=$volumeFloat)")
+        tts.speak(text, TextToSpeech.QUEUE_FLUSH, params, utteranceId)
     }
 
     fun shutdown() {
-        tts.stop()
-        tts.shutdown()
+        if (::tts.isInitialized) {
+            tts.stop()
+            tts.shutdown()
+        }
+        isReady = false
     }
 }

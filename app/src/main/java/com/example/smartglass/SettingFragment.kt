@@ -2,42 +2,23 @@ package com.example.smartglass
 
 import android.content.Context
 import android.os.Bundle
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
+import android.os.PowerManager
+import android.view.*
 import android.widget.*
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
-import androidx.core.content.edit
+import androidx.lifecycle.lifecycleScope
+import com.example.smartglass.SettingAction.SettingsManager
+import com.example.smartglass.TTSandSTT.VoiceResponder
 
 class SettingFragment : Fragment() {
 
     private lateinit var seekBarVolume: SeekBar
-
-    private lateinit var tvGiongDoc: TextView
     private lateinit var tvTocDoDoc: TextView
-    private lateinit var tvAppVersion: TextView
-
-    private val prefs by lazy {
-        requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-    }
-
-    private fun showDevTeamDialog() {
-        val devTeamInfo = """
-        - Nhóm phát triển:
-        • Lê Hòa Hiệp
-        • Nguyễn Văn Hướng
-        • Phạm Anh Khoa
-        • Trương Công Thành
-        • Nguyễn Tấn Việt
-    """.trimIndent()
-
-        AlertDialog.Builder(requireContext())
-            .setTitle("Thông tin nhóm")
-            .setMessage(devTeamInfo)
-            .setPositiveButton("Đóng", null)
-            .show()
-    }
+    private lateinit var cbUnlockDevice: CheckBox
+    private lateinit var settingsManager: SettingsManager
+    private lateinit var voiceResponder: VoiceResponder
+    private var wakeLock: PowerManager.WakeLock? = null
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -45,113 +26,153 @@ class SettingFragment : Fragment() {
     ): View = inflater.inflate(R.layout.fragment_setting, container, false)
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        seekBarVolume = view.findViewById(R.id.seekbar_tts_volume)
+        settingsManager = SettingsManager.getInstance(requireContext())
+        voiceResponder = VoiceResponder(requireContext())
 
-        tvGiongDoc = view.findViewById(R.id.tv_giong_doc)
+        seekBarVolume = view.findViewById(R.id.seekbar_tts_volume)
         tvTocDoDoc = view.findViewById(R.id.tv_toc_do_doc)
-        tvAppVersion = view.findViewById(R.id.tv_app_version)
+        cbUnlockDevice = view.findViewById(R.id.cb_unlock_device)
 
         val tvDevTeam = view.findViewById<TextView>(R.id.tv_dev_team)
-        tvDevTeam.setOnClickListener {
-            showDevTeamDialog()
-        }
+        tvDevTeam.setOnClickListener { showDevTeamDialog() }
 
-        // Hiển thị phiên bản trực tiếp trong TextView thay vì show dialog
-        val versionName = runCatching {
-            requireContext().packageManager.getPackageInfo(requireContext().packageName, 0).versionName
-        }.getOrDefault("1.0")
-        tvAppVersion.text = "Phiên bản ứng dụng: $versionName"
-
-        loadSettings()
         setupListeners()
+        observeSettings()
     }
 
-    private fun loadSettings() {
-        // Âm lượng
-        seekBarVolume.progress = prefs.getInt(KEY_VOLUME, DEFAULT_VOLUME)
-            .coerceIn(MIN_VOLUME, MAX_VOLUME)
-
-        // Hiển thị lựa chọn hiện tại cho giọng đọc
-        val voice = prefs.getString(KEY_VOICE, "male")
-        tvGiongDoc.text = if (voice == "female") "Giọng đọc: Nữ" else "Giọng đọc: Nam"
-
-        // Hiển thị lựa chọn hiện tại cho tốc độ
-        when (prefs.getString(KEY_SPEED, "normal")) {
-            "slow" -> tvTocDoDoc.text = "Tốc độ đọc: Chậm"
-            "fast" -> tvTocDoDoc.text = "Tốc độ đọc: Nhanh"
-            "very_fast" -> tvTocDoDoc.text = "Tốc độ đọc: Rất nhanh"
-            else -> tvTocDoDoc.text = "Tốc độ đọc: Bình thường"
+    private fun observeSettings() {
+        viewLifecycleOwner.lifecycleScope.launchWhenStarted {
+            settingsManager.volumeFlow.collect { vol ->
+                if (seekBarVolume.progress != vol) seekBarVolume.progress = vol
+            }
         }
-    }
-
-    private fun saveSettings(key: String, value: String) {
-        prefs.edit {
-            putString(key, value)
+        viewLifecycleOwner.lifecycleScope.launchWhenStarted {
+            settingsManager.speedFlow.collect { speed ->
+                tvTocDoDoc.text = when(speed) {
+                    "very_slow" -> "Tốc độ đọc: Rất chậm"
+                    "slow" -> "Tốc độ đọc: Chậm"
+                    "fast" -> "Tốc độ đọc: Nhanh"
+                    "very_fast" -> "Tốc độ đọc: Rất nhanh"
+                    else -> "Tốc độ đọc: Bình thường"
+                }
+            }
         }
-        loadSettings()
+        viewLifecycleOwner.lifecycleScope.launchWhenStarted {
+            settingsManager.keepScreenOnFlow.collect { enabled ->
+                if (cbUnlockDevice.isChecked != enabled) cbUnlockDevice.isChecked = enabled
+                applyKeepScreenOn(enabled)
+            }
+        }
     }
 
     private fun setupListeners() {
         seekBarVolume.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                prefs.edit { putInt(KEY_VOLUME, progress) }
+                if (fromUser) {
+                    settingsManager.setVolume(progress)
+                    voiceResponder.speak("Âm lượng hiện tại là $progress phần trăm.")
+                }
             }
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         })
 
-        // Khi click vào giọng đọc → show dialog lựa chọn
-        tvGiongDoc.setOnClickListener {
-            val voices = arrayOf("Nam", "Nữ")
-            val checked = if (prefs.getString(KEY_VOICE, "male") == "female") 1 else 0
+        tvTocDoDoc.setOnClickListener { showSpeedSelectionDialog() }
 
-            AlertDialog.Builder(requireContext())
-                .setTitle("Chọn giọng đọc")
-                .setSingleChoiceItems(voices, checked) { dialog, which ->
-                    val selected = if (which == 1) "female" else "male"
-                    saveSettings(KEY_VOICE, selected)
-                    dialog.dismiss()
-                }
-                .setNegativeButton("Hủy", null)
-                .show()
+        cbUnlockDevice.setOnCheckedChangeListener { _, isChecked ->
+            settingsManager.setKeepScreenOn(isChecked)
+            val msg = if (isChecked) "Thiết bị sẽ luôn sáng." else "Thiết bị có thể tự khóa màn hình."
+            voiceResponder.speak(msg)
+        }
+    }
+
+    private fun showSpeedSelectionDialog() {
+        val speeds = arrayOf("Rất chậm", "Chậm", "Bình thường", "Nhanh", "Rất nhanh")
+        val currentIndex = when (settingsManager.getSpeed()) {
+            "very_slow" -> 0
+            "slow" -> 1
+            "normal" -> 2
+            "fast" -> 3
+            "very_fast" -> 4
+            else -> 2
         }
 
-        // Khi click vào tốc độ đọc → show dialog lựa chọn
-        tvTocDoDoc.setOnClickListener {
-            val speeds = arrayOf("Chậm", "Bình thường", "Nhanh", "Rất nhanh")
-            val current = when (prefs.getString(KEY_SPEED, "normal")) {
-                "slow" -> 0
-                "normal" -> 1
-                "fast" -> 2
-                "very_fast" -> 3
-                else -> 1
+        AlertDialog.Builder(requireContext())
+            .setTitle("Chọn tốc độ đọc")
+            .setSingleChoiceItems(speeds, currentIndex) { dialog, which ->
+                val selectedSpeed = when (which) {
+                    0 -> "very_slow"
+                    1 -> "slow"
+                    2 -> "normal"
+                    3 -> "fast"
+                    4 -> "very_fast"
+                    else -> "normal"
+                }
+                settingsManager.setSpeed(selectedSpeed)
+                voiceResponder.speak("Đã đặt tốc độ đọc: ${speeds[which]}")
+                dialog.dismiss()
             }
+            .setNegativeButton("Hủy", null)
+            .show()
+    }
 
-            AlertDialog.Builder(requireContext())
-                .setTitle("Chọn tốc độ đọc")
-                .setSingleChoiceItems(speeds, current) { dialog, which ->
-                    val selected = when (which) {
-                        0 -> "slow"
-                        2 -> "fast"
-                        3 -> "very_fast"
-                        else -> "normal"
-                    }
-                    saveSettings(KEY_SPEED, selected)
-                    dialog.dismiss()
-                }
-                .setNegativeButton("Hủy", null)
-                .show()
+    private fun applyKeepScreenOn(enabled: Boolean) {
+        val pm = requireContext().getSystemService(Context.POWER_SERVICE) as PowerManager
+        if (enabled) {
+            if (wakeLock == null || !wakeLock!!.isHeld) {
+                wakeLock = pm.newWakeLock(
+                    PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
+                    "SmartGlass::KeepScreenOn"
+                )
+                wakeLock?.acquire()
+            }
+            requireActivity().window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            if (wakeLock?.isHeld == true) wakeLock?.release()
+            requireActivity().window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
     }
 
-    companion object {
-        private const val PREFS_NAME = "app_settings"
-        private const val KEY_VOLUME = "volume"
-        private const val KEY_VOICE = "voice"
-        private const val KEY_SPEED = "speed"
-
-        private const val MIN_VOLUME = 0
-        private const val MAX_VOLUME = 100
-        private const val DEFAULT_VOLUME = 100
+    override fun onDestroyView() {
+        if (wakeLock?.isHeld == true) wakeLock?.release()
+        voiceResponder.shutdown()
+        super.onDestroyView()
     }
+
+    data class DevMember(
+        val name: String,
+        val studentId: String,
+        val role: String,
+        val avatarRes: Int
+    )
+
+    private fun showDevTeamDialog() {
+        val members = listOf(
+            DevMember("Lê Hòa Hiệp", "20231234", "Leader - AI Machine Development", R.drawable.hiep),
+            DevMember("Nguyễn Văn Hướng", "20231235", "Embedded software development", R.drawable.huong),
+            DevMember("Phạm Anh Khoa", "28211152934", "Android Development", R.drawable.khoa),
+            DevMember("Trương Công Thành", "20231237", "Sub Android Development - Collect Data", R.drawable.thanh),
+            DevMember("Nguyễn Tấn Việt", "20231238", "Sub Android Development - Train Model", R.drawable.viet),
+        )
+
+        val dialogView = layoutInflater.inflate(R.layout.dialog_dev_team_card, null)
+        val container = dialogView.findViewById<LinearLayout>(R.id.member_container)
+
+        members.forEach { member ->
+            val memberView = layoutInflater.inflate(R.layout.item_member, container, false)
+            memberView.findViewById<ImageView>(R.id.img_avatar).setImageResource(member.avatarRes)
+            memberView.findViewById<TextView>(R.id.tv_name).text = member.name
+            memberView.findViewById<TextView>(R.id.tv_info).text = "${member.studentId} - ${member.role}"
+            container.addView(memberView)
+        }
+
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(requireContext())
+            .setView(dialogView)
+            .setPositiveButton("Đóng", null)
+            .create()
+
+        // Animation mở Dialog
+        dialog.show()
+    }
+
 }

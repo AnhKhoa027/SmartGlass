@@ -4,28 +4,23 @@ import android.content.Context
 import android.graphics.Bitmap
 import com.example.smartglass.ObjectDetection.*
 import com.example.smartglass.DetectResponse.DetectionSpeaker
+import com.example.smartglass.TTSandSTT.VoiceResponder
 import kotlinx.coroutines.*
 
 /**
- * DetectionManager (Optimized)
- * ----------------------------
- * - Nhận frame từ CameraViewManager
- * - Gọi YOLO detect trong background
- * - Nếu không phát hiện → fallback API
- * - Quản lý phát giọng nói và overlay
+ * DetectionManager (Optimized + Per-box fallback, YOLO realtime speak only)
  */
 class DetectionManager(
     context: Context,
     private val cameraViewManager: CameraViewManager,
     private val detectionSpeaker: DetectionSpeaker,
     private val apiDetectionManager: ApiDetectionManager,
+    private var voiceResponder: VoiceResponder? = null,
     private val scope: CoroutineScope
 ) {
     private val tracker = ObjectTracker(maxObjects = 5, iouThreshold = 0.5f)
     var lastFrame: Bitmap? = null
     private var isDetecting = false
-    private var lastUnknownSpeakTime = 0L
-    private val unknownSpeakInterval = 5000L // 5s
 
     // YOLO Detector
     private val detector = Detector(
@@ -33,41 +28,61 @@ class DetectionManager(
         modelPath = "yolov8n_int8.tflite",
         labelPath = "example_label_file.txt",
         detectorListener = object : Detector.DetectorListener {
+
+            override fun onDetect(boundingBoxes: List<BoundingBox>, inferenceTime: Long) {
+                scope.launch(Dispatchers.IO) {
+                    val tracked = tracker.update(boundingBoxes)
+                    val updatedBoxes = tracked.map { trackedObj ->
+                        val box = trackedObj.smoothBox
+                        // Nếu YOLO không chắc → crop và classify fallback
+                        if (box.clsName == "Unknown" || box.cnf < 0.5f) {
+                            lastFrame?.let { frame ->
+                                val crop = cropBoundingBox(frame, box)
+                                try {
+                                    val (label, conf) = classifier.classify(crop)
+                                    box.copy(clsName = label, cnf = conf)
+                                } catch (e: Exception) {
+                                    box
+                                }
+                            } ?: box
+                        } else box
+                    }
+
+                    withContext(Dispatchers.Main) {
+                        cameraViewManager.setOverlayResults(updatedBoxes)
+                        val labels = tracked.joinToString { it.smoothBox.clsName }
+                        detectionSpeaker.speakDetections(
+                            tracked,
+                            cameraViewManager.getOverlayWidth(),
+                            cameraViewManager.getOverlayHeight()
+                        )
+                        println("YOLO detect done in ${inferenceTime}ms → $labels")
+                    }
+                }
+            }
             override fun onEmptyDetect() {
                 cameraViewManager.setOverlayResults(emptyList())
                 fallbackApiLastFrame()
             }
 
-            override fun onDetect(boundingBoxes: List<BoundingBox>, inferenceTime: Long) {
-                val tracked = tracker.update(boundingBoxes)
-                cameraViewManager.setOverlayResults(tracked.map { it.smoothBox })
-
-                val labels = tracked.joinToString { it.smoothBox.clsName }
-                detectionSpeaker.speakDetections(
-                    tracked,
-                    cameraViewManager.getOverlayWidth(),
-                    cameraViewManager.getOverlayHeight()
-                )
-
-                println("✅ YOLO detect done in ${inferenceTime}ms → $labels")
-            }
         },
         message = { println("Detector: $it") }
     )
+
+    private val classifier = Classifier(context, "model_meta.tflite", "label_model.txt")
 
     /** Nhận frame từ camera và chạy detect */
     fun detectFrame(bitmap: Bitmap) {
         if (isDetecting) return
         isDetecting = true
-
         lastFrame = bitmap
 
-        scope.launch(Dispatchers.IO) {
+        scope.launch(Dispatchers.Default) {
             try {
                 detector.detect(bitmap)
             } catch (e: Exception) {
                 e.printStackTrace()
-                speakOnce("Lỗi khi xử lý vật thể.")
+                detectionSpeaker.speak("Lỗi khi xử lý vật thể.")
             } finally {
                 isDetecting = false
             }
@@ -80,9 +95,8 @@ class DetectionManager(
         scope.launch(Dispatchers.IO) {
             try {
                 val apiResults = apiDetectionManager.detectFrame(frame)
-
                 if (apiResults.isEmpty()) {
-                    speakOnce("Không thể xác định vật thể.")
+                    detectionSpeaker.speak("Không thể xác định vật thể.")
                 } else {
                     val boxes = apiResults.map { apiBox ->
                         BoundingBox(
@@ -99,7 +113,6 @@ class DetectionManager(
                             clsName = apiBox.label
                         )
                     }
-
                     withContext(Dispatchers.Main) {
                         cameraViewManager.setOverlayResults(boxes)
                         val labels = boxes.joinToString { it.clsName }
@@ -109,18 +122,18 @@ class DetectionManager(
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-                speakOnce("Lỗi khi xác định vật thể qua API.")
+                detectionSpeaker.speak("Lỗi khi xác định vật thể qua API.")
             }
         }
     }
 
-    /** Đảm bảo không lặp lại lời nói trong 5s */
-    private fun speakOnce(text: String) {
-        val now = System.currentTimeMillis()
-        if (now - lastUnknownSpeakTime > unknownSpeakInterval) {
-            detectionSpeaker.speak(text)
-            lastUnknownSpeakTime = now
-        }
+    /** Crop 1 bounding box từ frame */
+    private fun cropBoundingBox(frame: Bitmap, box: BoundingBox): Bitmap {
+        val left = (box.x1 * frame.width).toInt().coerceIn(0, frame.width - 1)
+        val top = (box.y1 * frame.height).toInt().coerceIn(0, frame.height - 1)
+        val right = (box.x2 * frame.width).toInt().coerceIn(left + 1, frame.width)
+        val bottom = (box.y2 * frame.height).toInt().coerceIn(top + 1, frame.height)
+        return Bitmap.createBitmap(frame, left, top, right - left, bottom - top)
     }
 
     fun release() {

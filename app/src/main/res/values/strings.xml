@@ -47,7 +47,7 @@
     <string name="label_tts_volume">Âm Lượng Giọng Nói</string>
     <string name="label_tts_speed">Tốc Độ Đọc</string>
 
-
+    <string name="label_other">Khác</string>
     <string name="label_info">Thông Tin</string>
     <string name="checkbox_unlock_device">Không Khóa Thiết Bị</string>
     <string name="label_team_info">Thông Tin Nhóm Phát Triển</string>

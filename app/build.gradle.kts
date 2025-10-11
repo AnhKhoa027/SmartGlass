@@ -79,4 +79,10 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.11.0")
 
     implementation("org.java-websocket:Java-WebSocket:1.5.4")
+
+
+    // CardView
+    implementation("androidx.cardview:cardview:1.0.0")
+// Material Design (nếu dùng MaterialCardView)
+    implementation("com.google.android.material:material:1.9.0")
 }

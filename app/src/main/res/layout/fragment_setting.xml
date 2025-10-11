@@ -19,16 +19,6 @@
             android:paddingTop="16dp"
             android:paddingBottom="8dp" />
 
-        <!-- Giọng đọc -->
-        <TextView
-            android:id="@+id/tv_giong_doc"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/label_giong_doc"
-            android:textSize="18sp"
-            android:textColor="@android:color/black"
-            android:paddingTop="8dp"
-            android:paddingBottom="8dp" />
 
         <!-- Radio group -->
         <RadioGroup
@@ -115,12 +105,10 @@
                 android:text="@string/speed_very_fast" />
         </RadioGroup>
 
-
-        <!-- Thông tin -->
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/label_info"
+            android:text="@string/label_other"
             android:textStyle="bold"
             android:textSize="22sp"
             android:textColor="#4CAF50"
@@ -134,6 +122,16 @@
             android:textSize="18sp"
             android:text="@string/checkbox_unlock_device"
             android:layout_marginBottom="16dp" />
+        <!-- Thông tin -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/label_info"
+            android:textStyle="bold"
+            android:textSize="22sp"
+            android:textColor="#4CAF50"
+            android:paddingTop="20dp"
+            android:paddingBottom="15dp" />
 
         <TextView
             android:id="@+id/tv_dev_team"
@@ -141,7 +139,7 @@
             android:layout_height="wrap_content"
             android:text="@string/label_team_info"
             android:textSize="18sp"
-            android:layout_marginBottom="8dp" />
+            android:layout_marginBottom="20dp" />
 
         <TextView
             android:id="@+id/tv_app_version"

@@ -9,4 +9,5 @@
     <color name="button_off_color">#A9AFC0</color>
     <color name="connecting_color">#4CAF50</color>
     <color name="bounding_box_color">#FF00FF00</color>
+    <color name="teal_700">#018786</color>
 </resources>
