@@ -92,39 +92,26 @@ class CameraViewManager(
 
                 scope.launch {
                     try {
-                        // Decode frame từ ESP32
-                        val bitmap =
-                            BitmapFactory.decodeStream(ByteArrayInputStream(bytes.toByteArray()))
-                                ?: return@launch
+                        val bitmap = BitmapFactory.decodeStream(ByteArrayInputStream(bytes.toByteArray())) ?: return@launch
 
-                        // Lưu ảnh gốc cho YOLO (không lật)
-                        detectionManager?.lastFrame = bitmap
-
-                        // --- YOLO detect ---
                         launch(Dispatchers.Default) {
-                            detectionManager?.detectFrame(bitmap)
+                            try {
+                                detectionManager?.detectFrame(bitmap)
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
                         }
 
-                        // --- Vẽ ảnh (đã lật) lên TextureView ---
                         withContext(Dispatchers.Main) {
                             try {
                                 val canvas = s.lockCanvas(null)
                                 if (canvas != null) {
                                     canvas.drawColor(Color.BLACK, PorterDuff.Mode.CLEAR)
-
-                                    // ✅ Lật ngang ảnh khi hiển thị
                                     val matrix = Matrix().apply {
                                         preScale(-1f, 1f, canvas.width / 2f, canvas.height / 2f)
                                     }
                                     canvas.setMatrix(matrix)
-
-                                    canvas.drawBitmap(
-                                        bitmap,
-                                        null,
-                                        Rect(0, 0, canvas.width, canvas.height),
-                                        paint
-                                    )
-
+                                    canvas.drawBitmap(bitmap, null, Rect(0, 0, canvas.width, canvas.height), paint)
                                     s.unlockCanvasAndPost(canvas)
                                 }
                             } catch (e: Exception) {
@@ -132,12 +119,14 @@ class CameraViewManager(
                             }
                         }
 
-                        // Không recycle bitmap (YOLO còn dùng)
+                        bitmap.recycle()
                     } catch (e: Exception) {
                         e.printStackTrace()
                     }
                 }
             }
+
+
         })
     }
 

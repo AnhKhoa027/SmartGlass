@@ -118,18 +118,18 @@ class HomeFragment : Fragment() {
         if (detectionSpeaker == null)
             detectionSpeaker = DetectionSpeaker(requireContext(), voiceResponder!!)
 
-//        if (detectionManager == null) {
-//            val apiManager = ApiDetectionManager(requireContext())
-//            detectionManager = DetectionManager(
-//                requireContext(),
-//                cameraViewManager,
-//                detectionSpeaker!!,
-//                apiManager,
-//                scope
-//            )
-//        } else {
-//            detectionManager?.lastFrame = null // reset bitmap cũ khi reconnect
-//        }
+        if (detectionManager == null) {
+            val apiManager = ApiDetectionManager(requireContext())
+            detectionManager = DetectionManager(
+                requireContext(),
+                cameraViewManager,
+                detectionSpeaker!!,
+                apiManager,
+                scope
+            )
+        } else {
+            detectionManager?.lastFrame = null
+        }
     }
 
     fun connectToXiaoCam(callback: ((Boolean) -> Unit)? = null) {

@@ -4,7 +4,6 @@ import android.content.Context
 import android.graphics.Bitmap
 import com.example.smartglass.ObjectDetection.*
 import com.example.smartglass.DetectResponse.DetectionSpeaker
-import com.example.smartglass.TTSandSTT.VoiceResponder
 import kotlinx.coroutines.*
 
 /**
@@ -15,7 +14,6 @@ class DetectionManager(
     private val cameraViewManager: CameraViewManager,
     private val detectionSpeaker: DetectionSpeaker,
     private val apiDetectionManager: ApiDetectionManager,
-    private var voiceResponder: VoiceResponder? = null,
     private val scope: CoroutineScope
 ) {
     private val tracker = ObjectTracker(maxObjects = 5, iouThreshold = 0.5f)
@@ -36,16 +34,19 @@ class DetectionManager(
                         val box = trackedObj.smoothBox
                         // Nếu YOLO không chắc → crop và classify fallback
                         if (box.clsName == "Unknown" || box.cnf < 0.5f) {
-                            lastFrame?.let { frame ->
-                                val crop = cropBoundingBox(frame, box)
+                            val frameCopy = lastFrame?.takeIf { !it.isRecycled }?.copy(Bitmap.Config.ARGB_8888, false)
+                            if (frameCopy != null) {
                                 try {
+                                    val crop = cropBoundingBox(frameCopy, box)
                                     val (label, conf) = classifier.classify(crop)
                                     box.copy(clsName = label, cnf = conf)
                                 } catch (e: Exception) {
+                                    e.printStackTrace()
                                     box
                                 }
-                            } ?: box
+                            } else box
                         } else box
+
                     }
 
                     withContext(Dispatchers.Main) {
@@ -79,7 +80,11 @@ class DetectionManager(
 
         scope.launch(Dispatchers.Default) {
             try {
-                detector.detect(bitmap)
+                // 🔥 Scale về đúng kích thước model YOLO
+                val inputSize = 224  // hoặc 320, 640 tùy model
+                val scaledBitmap = Bitmap.createScaledBitmap(bitmap, inputSize, inputSize, true)
+
+                detector.detect(scaledBitmap)
             } catch (e: Exception) {
                 e.printStackTrace()
                 detectionSpeaker.speak("Lỗi khi xử lý vật thể.")
@@ -88,6 +93,7 @@ class DetectionManager(
             }
         }
     }
+
 
     /** Fallback API khi YOLO không phát hiện gì */
     private fun fallbackApiLastFrame() {
@@ -127,14 +133,21 @@ class DetectionManager(
         }
     }
 
-    /** Crop 1 bounding box từ frame */
     private fun cropBoundingBox(frame: Bitmap, box: BoundingBox): Bitmap {
-        val left = (box.x1 * frame.width).toInt().coerceIn(0, frame.width - 1)
-        val top = (box.y1 * frame.height).toInt().coerceIn(0, frame.height - 1)
-        val right = (box.x2 * frame.width).toInt().coerceIn(left + 1, frame.width)
-        val bottom = (box.y2 * frame.height).toInt().coerceIn(top + 1, frame.height)
-        return Bitmap.createBitmap(frame, left, top, right - left, bottom - top)
+        if (frame.isRecycled) {
+            throw IllegalStateException("Frame đã bị recycle, không thể crop.")
+        }
+
+        val safeBitmap = frame.copy(Bitmap.Config.ARGB_8888, false)
+
+        val left = (box.x1 * safeBitmap.width).toInt().coerceIn(0, safeBitmap.width - 1)
+        val top = (box.y1 * safeBitmap.height).toInt().coerceIn(0, safeBitmap.height - 1)
+        val right = (box.x2 * safeBitmap.width).toInt().coerceIn(left + 1, safeBitmap.width)
+        val bottom = (box.y2 * safeBitmap.height).toInt().coerceIn(top + 1, safeBitmap.height)
+
+        return Bitmap.createBitmap(safeBitmap, left, top, right - left, bottom - top)
     }
+
 
     fun release() {
         detector.close()

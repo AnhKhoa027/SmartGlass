@@ -19,7 +19,8 @@ class VoiceResponder(private val context: Context) : TextToSpeech.OnInitListener
     private val settings = SettingsManager.getInstance(context)
 
     init {
-        tts = TextToSpeech(context, this)
+        tts = TextToSpeech(context, this, "com.google.android.tts")
+        Log.d("VoiceResponder", "Tạo TTS instance, engine mặc định: ${tts.defaultEngine}")
     }
 
     override fun onInit(status: Int) {
