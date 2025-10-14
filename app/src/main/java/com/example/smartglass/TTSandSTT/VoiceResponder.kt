@@ -19,8 +19,7 @@ class VoiceResponder(private val context: Context) : TextToSpeech.OnInitListener
     private val settings = SettingsManager.getInstance(context)
 
     init {
-        tts = TextToSpeech(context, this, "com.google.android.tts")
-        Log.d("VoiceResponder", "Tạo TTS instance, engine mặc định: ${tts.defaultEngine}")
+        tts = TextToSpeech(context, this)
     }
 
     override fun onInit(status: Int) {
@@ -35,14 +34,14 @@ class VoiceResponder(private val context: Context) : TextToSpeech.OnInitListener
             )
 
             isReady = true
-            Log.d("VoiceResponder", "Google TTS đã sẵn sàng")
+            Log.d("VoiceResponder", "TextToSpeech đã sẵn sàng")
 
-            // Nếu có văn bản chờ, đọc ngay sau khi init
+            // Nếu có văn bản chờ → đọc ngay
             pendingText?.let { speak(it, pendingCallback) }
             pendingText = null
             pendingCallback = null
         } else {
-            Log.e("VoiceResponder", "TTS init failed: $status")
+            Log.e("VoiceResponder", "Khởi tạo TTS thất bại: $status")
         }
     }
 
@@ -50,7 +49,6 @@ class VoiceResponder(private val context: Context) : TextToSpeech.OnInitListener
         if (!isReady) {
             pendingText = text
             pendingCallback = onDone
-            Log.w("VoiceResponder", "TTS chưa sẵn sàng, chờ khởi tạo")
             return
         }
 
@@ -66,6 +64,7 @@ class VoiceResponder(private val context: Context) : TextToSpeech.OnInitListener
             }
         })
 
+        // Lấy volume & speed từ SettingsManager
         val volumeFloat = settings.getVolumeFloat()
         val speed = settings.getSpeedMultiplier()
 
@@ -73,7 +72,7 @@ class VoiceResponder(private val context: Context) : TextToSpeech.OnInitListener
         tts.setSpeechRate(speed)
         tts.setPitch(1.0f)
 
-        Log.d("VoiceResponder", "🗣️ Nói: $text (speed=$speed, volume=$volumeFloat)")
+        Log.d("VoiceResponder", "🗣️ Nói: \"$text\" (speed=$speed, volume=$volumeFloat)")
         tts.speak(text, TextToSpeech.QUEUE_FLUSH, params, utteranceId)
     }
 
@@ -83,5 +82,6 @@ class VoiceResponder(private val context: Context) : TextToSpeech.OnInitListener
             tts.shutdown()
         }
         isReady = false
+        Log.d("VoiceResponder", "Đã tắt TextToSpeech")
     }
 }

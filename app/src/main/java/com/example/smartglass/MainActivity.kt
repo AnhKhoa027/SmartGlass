@@ -192,14 +192,16 @@ class MainActivity : AppCompatActivity() {
             context = this,
             accessKey = "LBKWPv6jiRpVsjkJp9wmYWhiv/H1dTxzzu6eQpOd++WZNm7kHMPUbw==",
             onWakeWordDetected = {
-                voiceResponder.speak("Tôi đang nghe...")
-                voiceRecognitionManager.startListening()
+                voiceResponder.speak("Tôi đang nghe...") {
+                    voiceRecognitionManager.startListening()
+                }
             }
         ) ?: run {
             voiceResponder.speak("Không thể khởi tạo wake word, kiểm tra file ppn")
             null
         }
     }
+
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
