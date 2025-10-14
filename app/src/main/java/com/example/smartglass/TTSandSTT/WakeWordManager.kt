@@ -16,6 +16,8 @@ class WakeWordManager(
 ) {
 
     private var porcupineManager: PorcupineManager? = null
+    private var lastDetectedTime = 0L
+    private val debounceMs = 2000L
 
     fun startListening() {
         try {
@@ -25,12 +27,20 @@ class WakeWordManager(
                 .setSensitivity(sensitivity)
                 .build(context, object : PorcupineManagerCallback {
                     override fun invoke(keywordIndex: Int) {
-                        // Được gọi khi phát hiện từ khóa
+                        val now = System.currentTimeMillis()
+                        if (now - lastDetectedTime < debounceMs) {
+                            Log.d("WakeWord", "Bỏ qua wake word do vừa kích hoạt gần đây.")
+                            return
+                        }
+                        lastDetectedTime = now
+                        Log.d("WakeWord", "🎤 Wake word phát hiện (index=$keywordIndex)")
                         onWakeWordDetected()
                     }
                 })
             porcupineManager?.start()
+            Log.d("WakeWord", "Porcupine bắt đầu lắng nghe từ khóa.")
         } catch (e: IOException) {
+            Log.e("WakeWord", "Lỗi khi khởi tạo Porcupine: ${e.message}")
             e.printStackTrace()
         }
     }
@@ -39,6 +49,7 @@ class WakeWordManager(
         porcupineManager?.stop()
         porcupineManager?.delete()
         porcupineManager = null
+        Log.d("WakeWord", "Dừng lắng nghe wake word.")
     }
 
     companion object {
@@ -75,6 +86,7 @@ class WakeWordManager(
                     startListening()
                 }
             } catch (e: Exception) {
+                Log.e("WakeWord", "Lỗi khi tạo WakeWordManager: ${e.message}")
                 e.printStackTrace()
                 null
             }

@@ -1,8 +1,6 @@
-package com.example.smartglass.ai
-
+package com.example.smartglass.DetectResponse
 
 import android.graphics.Bitmap
-
 
 /**
  * Simple interface + example stub. Replace implementation with your ML model (YOLO/ML Kit/TensorFlow Lite).
