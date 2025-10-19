@@ -66,7 +66,7 @@ class MainActivity : AppCompatActivity() {
         // Khởi tạo TTS duy nhất
         voiceResponder = VoiceResponder(this)
 
-        // ✅ Khởi tạo Gemini
+        // Khởi tạo Gemini
         geminiChat = GeminiChat(geminiApiKey)
 
         // Load mặc định HomeFragment và truyền VoiceResponder
@@ -144,7 +144,8 @@ class MainActivity : AppCompatActivity() {
             bottomNav = bottomNavigationView,
             onConnect = { callback -> sendCommandToHomeFragment(connect = true, callback) },
             onDisconnect = { callback -> sendCommandToHomeFragment(connect = false, callback) },
-            voiceResponder = { voiceResponder.speak(it) }
+            voiceResponder = { voiceResponder.speak(it) },
+            geminiChat = geminiChat
         )
 
         fabMic.setOnClickListener { voiceRecognitionManager.startListening() }
@@ -166,7 +167,6 @@ class MainActivity : AppCompatActivity() {
         gestureManager.init()
     }
 
-    // ✅ Hàm xử lý khi nhận giọng nói (đưa Gemini vào xử lý)
     private fun handleTranscribedText(transcribed: String) {
         val handled = voiceCommandProcessor.handleCommand(transcribed)
 

@@ -36,7 +36,7 @@
 
         <!-- MainActivity hiển thị sau splash -->
         <activity
-            android:name=".gps.location_gps"
+            android:name=".MainActivity"
             android:exported="true"
             android:screenOrientation="portrait"
             tools:ignore="LockedOrientationActivity"/>

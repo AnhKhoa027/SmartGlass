@@ -63,7 +63,7 @@ class DetectionManager(
             }
             override fun onEmptyDetect() {
                 cameraViewManager.setOverlayResults(emptyList())
-                fallbackApiLastFrame()
+//                fallbackApiLastFrame()
             }
 
         },

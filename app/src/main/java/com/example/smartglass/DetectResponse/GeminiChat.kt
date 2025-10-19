@@ -15,12 +15,8 @@ class GeminiChat(private val apiKey: String) {
 
     private val client = OkHttpClient()
     private val apiUrl =
-//        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent"
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
 
-    /**
-     * Gọi API đồng bộ (blocking)
-     */
     fun sendMessageSync(prompt: String): String? {
         val jsonBody = """
             {
@@ -60,9 +56,6 @@ class GeminiChat(private val apiKey: String) {
         }
     }
 
-    /**
-     * Gọi API bất đồng bộ (dành cho Android UI)
-     */
     fun sendMessageAsync(prompt: String, callback: (String?) -> Unit) {
         val jsonBody = """
             {
@@ -116,9 +109,6 @@ class GeminiChat(private val apiKey: String) {
         })
     }
 
-    /**
-     * Trích xuất nội dung text từ JSON phản hồi
-     */
     private fun extractTextResponse(responseBody: String): String? {
         return try {
             val json = JsonParser.parseString(responseBody).asJsonObject
@@ -131,10 +121,6 @@ class GeminiChat(private val apiKey: String) {
             null
         }
     }
-
-    /**
-     * Loại bỏ ký tự Markdown, khoảng trắng thừa
-     */
     private fun cleanResponse(text: String?): String? {
         if (text == null) return null
         return text
@@ -145,4 +131,14 @@ class GeminiChat(private val apiKey: String) {
             .replace(Regex("\\s+"), " ")
             .trim()
     }
+    fun analyzeUserCommand(command: String, callback: (String?) -> Unit) {
+        val prompt = """
+        Câu nói: "$command"
+    """.trimIndent()
+
+        sendMessageAsync(prompt) { response ->
+            callback(response)
+        }
+    }
 }
+
