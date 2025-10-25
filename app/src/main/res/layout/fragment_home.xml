@@ -28,21 +28,23 @@
         android:layout_centerHorizontal="true"
         android:layout_marginTop="30dp">
 
-        <!-- ImageView hiển thị frame từ ESP32 WebSocket -->
-        <TextureView
+        <!-- ✅ SurfaceView cho AUSBC USB camera -->
+        <SurfaceView
             android:id="@+id/camera_view"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:visibility="gone"
-            android:scaleType="fitXY" />
+            android:visibility="visible" />
 
-        <!-- Overlay YOLO -->
+        <!-- ✅ Overlay YOLO nằm trên SurfaceView -->
         <com.example.smartglass.ObjectDetection.OverlayView
             android:id="@+id/overlay"
             android:layout_width="match_parent"
-            android:layout_height="match_parent" />
+            android:layout_height="match_parent"
+            android:layout_gravity="center"
+            android:clickable="false"
+            android:focusable="false" />
 
-        <!-- Icon kính (hiện khi chưa kết nối) -->
+        <!-- ✅ Icon kính (hiện khi chưa kết nối) -->
         <ImageView
             android:id="@+id/glass_icon"
             android:layout_width="300dp"
@@ -53,15 +55,16 @@
             android:visibility="visible" />
     </FrameLayout>
 
-    <TextView
-        android:id="@+id/tvCameraIp"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="IP: --"
-        android:textSize="20sp"
-        android:layout_below="@id/cam_container"
-        android:layout_centerHorizontal="true"
-        android:layout_marginTop="10dp"/>
+<!--    &lt;!&ndash; IP hiển thị (Firebase IP) &ndash;&gt;-->
+<!--    <TextView-->
+<!--        android:id="@+id/tvCameraIp"-->
+<!--        android:layout_width="wrap_content"-->
+<!--        android:layout_height="wrap_content"-->
+<!--        android:text="IP: &#45;&#45;"-->
+<!--        android:textSize="20sp"-->
+<!--        android:layout_below="@id/cam_container"-->
+<!--        android:layout_centerHorizontal="true"-->
+<!--        android:layout_marginTop="10dp"/>-->
 
     <!-- Tên thiết bị -->
     <TextView

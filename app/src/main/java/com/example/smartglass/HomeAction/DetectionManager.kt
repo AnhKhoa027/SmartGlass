@@ -11,7 +11,7 @@ import kotlinx.coroutines.*
  */
 class DetectionManager(
     context: Context,
-    private val cameraViewManager: CameraViewManager,
+    private val cameraViewManager: UsbCameraViewManager,
     private val detectionSpeaker: DetectionSpeaker,
     private val apiDetectionManager: ApiDetectionManager,
     private val scope: CoroutineScope
@@ -61,11 +61,11 @@ class DetectionManager(
                     }
                 }
             }
+
             override fun onEmptyDetect() {
                 cameraViewManager.setOverlayResults(emptyList())
 //                fallbackApiLastFrame()
             }
-
         },
         message = { println("Detector: $it") }
     )
@@ -80,8 +80,7 @@ class DetectionManager(
 
         scope.launch(Dispatchers.Default) {
             try {
-                // 🔥 Scale về đúng kích thước model YOLO
-                val inputSize = 224  // hoặc 320, 640 tùy model
+                val inputSize = 640  // 224/ 320 /640
                 val scaledBitmap = Bitmap.createScaledBitmap(bitmap, inputSize, inputSize, true)
 
                 detector.detect(scaledBitmap)
@@ -93,7 +92,6 @@ class DetectionManager(
             }
         }
     }
-
 
     /** Fallback API khi YOLO không phát hiện gì */
     private fun fallbackApiLastFrame() {
@@ -147,7 +145,6 @@ class DetectionManager(
 
         return Bitmap.createBitmap(safeBitmap, left, top, right - left, bottom - top)
     }
-
 
     fun release() {
         detector.close()

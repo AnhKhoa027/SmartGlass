@@ -211,7 +211,7 @@ class MainActivity : AppCompatActivity() {
     private fun sendCommandToHomeFragment(connect: Boolean, callback: (Boolean) -> Unit) {
         val currentFragment = supportFragmentManager.findFragmentById(R.id.frame_layout) as? HomeFragment
         currentFragment?.let {
-            if (connect) it.connectToXiaoCam(callback) else it.disconnectFromXiaoCam(callback)
+            if (connect) it.connectToUsbCam(callback) else it.disconnectFromUsbCam(callback)
         }
     }
 

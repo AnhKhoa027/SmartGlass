@@ -77,8 +77,8 @@ dependencies {
     // Firebase Realtime Database KTX
     implementation("com.google.firebase:firebase-database-ktx")
     implementation("com.squareup.okhttp3:okhttp:4.11.0")
-
     implementation("org.java-websocket:Java-WebSocket:1.5.4")
+    implementation("com.github.jiangdongguo.AndroidUSBCamera:libausbc:3.2.10")
 
 
     // CardView

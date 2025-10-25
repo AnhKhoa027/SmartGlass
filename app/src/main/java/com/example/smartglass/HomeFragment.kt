@@ -14,10 +14,10 @@ import com.android.volley.toolbox.Volley
 import com.example.smartglass.DetectResponse.DetectionSpeaker
 import com.example.smartglass.ObjectDetection.OverlayView
 import com.example.smartglass.TTSandSTT.VoiceResponder
-import com.example.smartglass.HomeAction.CameraViewManager
 import com.example.smartglass.HomeAction.DetectionManager
 import com.example.smartglass.HomeAction.ApiDetectionManager
 import com.example.smartglass.HomeAction.FirebaseHelperOnDemand
+import com.example.smartglass.HomeAction.UsbCameraViewManager
 import kotlinx.coroutines.*
 
 class HomeFragment : Fragment() {
@@ -26,10 +26,10 @@ class HomeFragment : Fragment() {
     private lateinit var tvCameraIp: TextView
     private lateinit var requestQueue: RequestQueue
 
-    private lateinit var cameraViewManager: CameraViewManager
-    private lateinit var textureViewCam: TextureView
-    private lateinit var glassIcon: ImageView
     private lateinit var overlayView: OverlayView
+    private lateinit var usbCameraViewManager: UsbCameraViewManager
+    private lateinit var surfaceViewCam: android.view.SurfaceView
+    private lateinit var glassIcon: ImageView
 
     private var detectionManager: DetectionManager? = null
     private var detectionSpeaker: DetectionSpeaker? = null
@@ -38,14 +38,7 @@ class HomeFragment : Fragment() {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private lateinit var firebaseHelper: FirebaseHelperOnDemand
 
-    private var currentIp: String? = null
     private var isConnected = false
-
-    private val xiaoCamIp: String
-        get() = currentIp
-            ?: requireContext()
-                .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                .getString(KEY_XIAOCAM_IP, DEFAULT_IP) ?: DEFAULT_IP
 
     fun setVoiceResponder(vr: VoiceResponder) {
         voiceResponder = vr
@@ -58,15 +51,14 @@ class HomeFragment : Fragment() {
         val view = inflater.inflate(R.layout.fragment_home, container, false)
 
         btnConnectXiaoCam = view.findViewById(R.id.btnConnect)
-        tvCameraIp = view.findViewById(R.id.tvCameraIp)
-        textureViewCam = view.findViewById(R.id.camera_view)
+        //tvCameraIp = view.findViewById(R.id.tvCameraIp)
+        surfaceViewCam = view.findViewById(R.id.camera_view)
         glassIcon = view.findViewById(R.id.glass_icon)
         overlayView = view.findViewById(R.id.overlay)
 
-        cameraViewManager = CameraViewManager(textureViewCam, glassIcon, overlayView)
         firebaseHelper = FirebaseHelperOnDemand()
 
-        fetchCameraIpFromFirebase()
+        //fetchCameraIpFromFirebase()
 
         return view
     }
@@ -75,8 +67,7 @@ class HomeFragment : Fragment() {
         firebaseHelper.fetchCameraIp { ip ->
             activity?.runOnUiThread {
                 if (!ip.isNullOrEmpty()) {
-                    currentIp = ip
-                    tvCameraIp.text = "IP: $ip"
+                    tvCameraIp.text = "IP Firebase: $ip"
                     requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                         .edit().putString(KEY_XIAOCAM_IP, ip).apply()
                 } else {
@@ -94,10 +85,9 @@ class HomeFragment : Fragment() {
 
         btnConnectXiaoCam.setOnClickListener {
             if (isConnected) {
-                disconnectFromXiaoCam()
+                disconnectFromUsbCam()
             } else {
-                if (currentIp != null) connectToXiaoCam()
-                else Toast.makeText(context, "Chưa lấy được IP camera", Toast.LENGTH_SHORT).show()
+                connectToUsbCam()
             }
         }
 
@@ -122,7 +112,7 @@ class HomeFragment : Fragment() {
             val apiManager = ApiDetectionManager(requireContext())
             detectionManager = DetectionManager(
                 requireContext(),
-                cameraViewManager,
+                /* cameraViewManager = */ usbCameraViewManager, // truyền UsbCameraViewManager
                 detectionSpeaker!!,
                 apiManager,
                 scope
@@ -132,47 +122,60 @@ class HomeFragment : Fragment() {
         }
     }
 
-    fun connectToXiaoCam(callback: ((Boolean) -> Unit)? = null) {
+     fun connectToUsbCam(callback: ((Boolean) -> Unit)? = null) {
         updateButtonState(R.string.connecting, "#808080", false)
         voiceResponder?.speak("Đang kết nối với kính")
 
         ensureManagers()
 
-        cameraViewManager.showStream(xiaoCamIp, detectionManager,
-            onConnected = {
-                activity?.runOnUiThread {
-                    isConnected = true
-                    updateButtonState(R.string.connected, "#4CAF50", true)
-                    voiceResponder?.speak("Kết nối thành công")
-                    callback?.invoke(true)
-                }
-            },
-            onFailed = {
-                activity?.runOnUiThread {
-                    isConnected = false
-                    updateButtonState(R.string.connect, "#2F58C3", true)
-                    cameraViewManager.showGlassIcon()
-                    voiceResponder?.speak("Kết nối thất bại")
-                    callback?.invoke(false)
-                }
+        try {
+            usbCameraViewManager = UsbCameraViewManager(
+                requireContext(),
+                surfaceViewCam,
+                overlayView,
+                detectionManager
+            )
+
+            usbCameraViewManager.startCamera()
+
+            activity?.runOnUiThread {
+                isConnected = true
+                updateButtonState(R.string.connected, "#4CAF50", true)
+                voiceResponder?.speak("Kết nối thành công")
+                callback?.invoke(true)
             }
-        )
+
+        } catch (e: Exception) {
+            e.printStackTrace()
+            activity?.runOnUiThread {
+                isConnected = false
+                updateButtonState(R.string.connect, "#2F58C3", true)
+                glassIcon.visibility = View.VISIBLE
+                voiceResponder?.speak("Kết nối thất bại")
+                callback?.invoke(false)
+            }
+        }
     }
 
-    fun disconnectFromXiaoCam(callback: ((Boolean) -> Unit)? = null) {
-        cameraViewManager.showGlassIcon() // sẽ release WS + clear canvas
+     fun disconnectFromUsbCam(callback: ((Boolean) -> Unit)? = null) {
+        try {
+            usbCameraViewManager.release()
+        } catch (_: Exception) {}
+
         detectionSpeaker?.stop()
         isConnected = false
 
         updateButtonState(R.string.connect, "#2F58C3", true)
-        voiceResponder?.speak("Đã ngắt kết nối")
+        voiceResponder?.speak("Đã ngắt kết nối ")
 
         callback?.invoke(true)
     }
 
     override fun onDestroyView() {
         super.onDestroyView()
-        cameraViewManager.release()
+        try {
+            usbCameraViewManager.release()
+        } catch (_: Exception) { }
         requestQueue.cancelAll { true }
         scope.cancel()
         detectionManager?.release()
@@ -182,6 +185,5 @@ class HomeFragment : Fragment() {
     companion object {
         private const val PREFS_NAME = "app_settings"
         private const val KEY_XIAOCAM_IP = "xiaocam_ip"
-        private const val DEFAULT_IP = "192.168.255.114"
     }
 }
