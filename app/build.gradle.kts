@@ -71,17 +71,17 @@ dependencies {
     implementation("org.tensorflow:tensorflow-lite-gpu:2.16.1")
     implementation("org.tensorflow:tensorflow-lite-select-tf-ops:2.16.1")
     implementation("org.tensorflow:tensorflow-lite-metadata:0.4.4")
-
+    implementation("com.herohan:UVCAndroid:1.0.10")
     implementation("com.google.firebase:firebase-database:22.0.1")
     implementation(platform("com.google.firebase:firebase-bom:32.2.2"))
     // Firebase Realtime Database KTX
     implementation("com.google.firebase:firebase-database-ktx")
     implementation("com.squareup.okhttp3:okhttp:4.11.0")
     implementation("org.java-websocket:Java-WebSocket:1.5.4")
-    implementation(files("libs/libnative-3.2.9.aar"))
-    implementation(files("libs/libutils-3.2.9.aar"))
-    implementation(files("libs/libuvc-3.2.9.aar"))
-    implementation(files("libs/libuvccommon-3.2.9.aar"))
+//    implementation(files("libs/libnative-3.2.9.aar"))
+//    implementation(files("libs/libutils-3.2.9.aar"))
+//    implementation(files("libs/libuvc-3.2.9.aar"))
+//    implementation(files("libs/libuvccommon-3.2.9.aar"))
 
     // CardView
     implementation("androidx.cardview:cardview:1.0.0")

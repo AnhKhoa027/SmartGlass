@@ -46,7 +46,7 @@ class HomeFragment : Fragment() {
         overlayView = view.findViewById(R.id.overlay)
         firebaseHelper = FirebaseHelperOnDemand()
 
-        // ✅ Mặc định: hiển thị icon, ẩn SurfaceView
+        //hiển thị icon, ẩn SurfaceView
         surfaceViewCam.visibility = View.GONE
         glassIcon.visibility = View.VISIBLE
 
@@ -137,6 +137,14 @@ class HomeFragment : Fragment() {
             ensureManagers()
             usbCameraViewManager.startCamera()
 
+            scope.launch(Dispatchers.Main) {
+                delay(10000)
+                if (!isConnected) {
+                    updateButtonState(R.string.connect, "#2F58C3", true)
+                    voiceResponder?.speak("Không tìm thấy camera USB")
+                }
+            }
+
         } catch (e: Exception) {
             e.printStackTrace()
             requireActivity().runOnUiThread {
@@ -146,6 +154,7 @@ class HomeFragment : Fragment() {
             }
         }
     }
+
 
     /** ✅ Ngắt kết nối USB camera */
     fun disconnectFromUsbCam() {
