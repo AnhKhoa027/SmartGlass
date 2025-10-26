@@ -1,12 +1,10 @@
 package com.example.smartglass
 
-import android.content.Context
 import android.os.Bundle
 import android.view.*
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.TextView
-import android.widget.Toast
 import androidx.core.graphics.toColorInt
 import androidx.fragment.app.Fragment
 import com.android.volley.RequestQueue
@@ -14,68 +12,45 @@ import com.android.volley.toolbox.Volley
 import com.example.smartglass.DetectResponse.DetectionSpeaker
 import com.example.smartglass.ObjectDetection.OverlayView
 import com.example.smartglass.TTSandSTT.VoiceResponder
-import com.example.smartglass.HomeAction.DetectionManager
-import com.example.smartglass.HomeAction.ApiDetectionManager
-import com.example.smartglass.HomeAction.FirebaseHelperOnDemand
-import com.example.smartglass.HomeAction.UsbCameraViewManager
+import com.example.smartglass.HomeAction.*
 import kotlinx.coroutines.*
 
 class HomeFragment : Fragment() {
 
     private lateinit var btnConnectXiaoCam: Button
-    private lateinit var tvCameraIp: TextView
-    private lateinit var requestQueue: RequestQueue
-
-    private lateinit var overlayView: OverlayView
-    private lateinit var usbCameraViewManager: UsbCameraViewManager
-    private lateinit var surfaceViewCam: android.view.SurfaceView
+    private lateinit var surfaceViewCam: SurfaceView
     private lateinit var glassIcon: ImageView
+    private lateinit var overlayView: OverlayView
+
+    private lateinit var usbCameraViewManager: UsbCameraViewManager
+    private lateinit var requestQueue: RequestQueue
+    private lateinit var firebaseHelper: FirebaseHelperOnDemand
 
     private var detectionManager: DetectionManager? = null
     private var detectionSpeaker: DetectionSpeaker? = null
     private var voiceResponder: VoiceResponder? = null
 
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private lateinit var firebaseHelper: FirebaseHelperOnDemand
-
     private var isConnected = false
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     fun setVoiceResponder(vr: VoiceResponder) {
         voiceResponder = vr
     }
 
-    override fun onCreateView(
-        inflater: LayoutInflater, container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View {
+    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         val view = inflater.inflate(R.layout.fragment_home, container, false)
 
         btnConnectXiaoCam = view.findViewById(R.id.btnConnect)
-        //tvCameraIp = view.findViewById(R.id.tvCameraIp)
         surfaceViewCam = view.findViewById(R.id.camera_view)
         glassIcon = view.findViewById(R.id.glass_icon)
         overlayView = view.findViewById(R.id.overlay)
-
         firebaseHelper = FirebaseHelperOnDemand()
 
-        //fetchCameraIpFromFirebase()
+        // ✅ Mặc định: hiển thị icon, ẩn SurfaceView
+        surfaceViewCam.visibility = View.GONE
+        glassIcon.visibility = View.VISIBLE
 
         return view
-    }
-
-    private fun fetchCameraIpFromFirebase() {
-        firebaseHelper.fetchCameraIp { ip ->
-            activity?.runOnUiThread {
-                if (!ip.isNullOrEmpty()) {
-                    tvCameraIp.text = "IP Firebase: $ip"
-                    requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                        .edit().putString(KEY_XIAOCAM_IP, ip).apply()
-                } else {
-                    tvCameraIp.text = "IP: --"
-                    voiceResponder?.speak("Chưa có IP camera trong Firebase")
-                }
-            }
-        }
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -104,86 +79,95 @@ class HomeFragment : Fragment() {
 
     private fun ensureManagers() {
         if (voiceResponder == null) return
-
         if (detectionSpeaker == null)
             detectionSpeaker = DetectionSpeaker(requireContext(), voiceResponder!!)
-
         if (detectionManager == null) {
             val apiManager = ApiDetectionManager(requireContext())
             detectionManager = DetectionManager(
                 requireContext(),
-                /* cameraViewManager = */ usbCameraViewManager, // truyền UsbCameraViewManager
+                usbCameraViewManager,
                 detectionSpeaker!!,
                 apiManager,
                 scope
             )
-        } else {
-            detectionManager?.lastFrame = null
-        }
+        } else detectionManager?.lastFrame = null
     }
 
-     fun connectToUsbCam(callback: ((Boolean) -> Unit)? = null) {
+    /** ✅ Kết nối USB camera */
+    fun connectToUsbCam() {
         updateButtonState(R.string.connecting, "#808080", false)
         voiceResponder?.speak("Đang kết nối với kính")
-
-        ensureManagers()
 
         try {
             usbCameraViewManager = UsbCameraViewManager(
                 requireContext(),
                 surfaceViewCam,
                 overlayView,
-                detectionManager
-            )
+                detectionManager,
+                glassIcon
+            ).apply {
+                setOnCameraStateListener(object : UsbCameraViewManager.CameraStateListener {
+                    override fun onCameraConnected() {
+                        requireActivity().runOnUiThread {
+                            isConnected = true
+                            updateButtonState(R.string.connected, "#4CAF50", true)
+                            voiceResponder?.speak("Kết nối thành công")
+                        }
+                    }
 
-            usbCameraViewManager.startCamera()
+                    override fun onCameraDisconnected() {
+                        requireActivity().runOnUiThread {
+                            isConnected = false
+                            updateButtonState(R.string.connect, "#2F58C3", true)
+                            voiceResponder?.speak("Camera đã ngắt kết nối")
+                        }
+                    }
 
-            activity?.runOnUiThread {
-                isConnected = true
-                updateButtonState(R.string.connected, "#4CAF50", true)
-                voiceResponder?.speak("Kết nối thành công")
-                callback?.invoke(true)
+                    override fun onCameraError(error: String) {
+                        requireActivity().runOnUiThread {
+                            isConnected = false
+                            updateButtonState(R.string.connect, "#2F58C3", true)
+                            usbCameraViewManager.showGlassIcon()
+                            voiceResponder?.speak("Lỗi camera: $error")
+                        }
+                    }
+                })
             }
+
+            ensureManagers()
+            usbCameraViewManager.startCamera()
 
         } catch (e: Exception) {
             e.printStackTrace()
-            activity?.runOnUiThread {
+            requireActivity().runOnUiThread {
                 isConnected = false
                 updateButtonState(R.string.connect, "#2F58C3", true)
-                glassIcon.visibility = View.VISIBLE
                 voiceResponder?.speak("Kết nối thất bại")
-                callback?.invoke(false)
             }
         }
     }
 
-     fun disconnectFromUsbCam(callback: ((Boolean) -> Unit)? = null) {
+    /** ✅ Ngắt kết nối USB camera */
+    fun disconnectFromUsbCam() {
         try {
+            usbCameraViewManager.showGlassIcon()
             usbCameraViewManager.release()
         } catch (_: Exception) {}
 
         detectionSpeaker?.stop()
         isConnected = false
-
         updateButtonState(R.string.connect, "#2F58C3", true)
-        voiceResponder?.speak("Đã ngắt kết nối ")
-
-        callback?.invoke(true)
+        voiceResponder?.speak("Đã ngắt kết nối")
     }
 
     override fun onDestroyView() {
         super.onDestroyView()
         try {
             usbCameraViewManager.release()
-        } catch (_: Exception) { }
+        } catch (_: Exception) {}
         requestQueue.cancelAll { true }
         scope.cancel()
         detectionManager?.release()
         detectionSpeaker?.stop()
-    }
-
-    companion object {
-        private const val PREFS_NAME = "app_settings"
-        private const val KEY_XIAOCAM_IP = "xiaocam_ip"
     }
 }

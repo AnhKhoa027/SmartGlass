@@ -102,7 +102,7 @@ class VoiceCommandProcessor(
                 if (isConnected) {
                     voiceResponder("Đang hủy kết nối thiết bị...")
                     onDisconnect { success ->
-                        isConnected = !success
+                        isConnected =  !success
                         voiceResponder(if (success) "Đã hủy kết nối." else "Không thể hủy kết nối.")
                     }
                 } else voiceResponder("Thiết bị chưa được kết nối.")
