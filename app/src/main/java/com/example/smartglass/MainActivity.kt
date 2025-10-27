@@ -31,8 +31,9 @@ class MainActivity : AppCompatActivity() {
 
     private var greeted = false
     private val REQUEST_CODE_MIC = 1001
+    private val REQUEST_CODE_CAMERA = 1002
 
-    // ✅ Thêm API Gemini
+    //API Gemini
     private val geminiApiKey = "AIzaSyCdB2dFJiYjBSL3X4-VKy3mz3jYxQ0kcIc"
     private lateinit var geminiChat: GeminiChat
 
@@ -101,8 +102,9 @@ class MainActivity : AppCompatActivity() {
         // FloatingActionButton mic
         fabMic = findViewById(R.id.fabMic)
 
-        // Xin quyền micro
+        // Xin quyền Micro & Camera
         checkMicPermission()
+        checkCameraPermission()
     }
 
     private fun checkMicPermission() {
@@ -119,22 +121,44 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun checkCameraPermission() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.CAMERA),
+                REQUEST_CODE_CAMERA
+            )
+        }
+    }
+
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<out String>,
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == REQUEST_CODE_MIC) {
-            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                voiceResponder.speak("Đã cấp quyền micro, tôi sẵn sàng.")
-                initVoiceFeatures()
-            } else {
-                voiceResponder.speak("Bạn cần cấp quyền micro để dùng giọng nói.")
+        when (requestCode) {
+            REQUEST_CODE_MIC -> {
+                if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    voiceResponder.speak("Đã cấp quyền micro, tôi sẵn sàng.")
+                    initVoiceFeatures()
+                } else {
+                    voiceResponder.speak("Bạn cần cấp quyền micro để dùng giọng nói.")
+                }
+            }
+            REQUEST_CODE_CAMERA -> {
+                if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    voiceResponder.speak("Đã cấp quyền camera.")
+                } else {
+                    voiceResponder.speak("Bạn cần cấp quyền camera để sử dụng camera.")
+                }
             }
         }
     }
 
+    // =================== VOICE ===================
     private fun initVoiceFeatures() {
         voiceRecognitionManager = VoiceRecognitionManager(this, voiceRecognitionLauncher)
 
@@ -171,10 +195,7 @@ class MainActivity : AppCompatActivity() {
         val handled = voiceCommandProcessor.handleCommand(transcribed)
 
         if (!handled) {
-            // Chỉ nói “Tôi hiểu.” một lần để xác nhận
             voiceResponder.speak("Tôi hiểu.")
-
-            // Gửi câu hỏi đến Gemini
             geminiChat.sendMessageAsync(transcribed) { responseText ->
                 runOnUiThread {
                     if (!responseText.isNullOrBlank()) {
@@ -201,7 +222,6 @@ class MainActivity : AppCompatActivity() {
             null
         }
     }
-
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)

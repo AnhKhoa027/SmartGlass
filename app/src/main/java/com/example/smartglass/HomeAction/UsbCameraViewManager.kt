@@ -2,10 +2,7 @@ package com.example.smartglass.HomeAction
 
 import android.content.Context
 import android.graphics.*
-import android.hardware.usb.UsbDevice
-import android.os.Handler
-import android.os.Looper
-import android.view.SurfaceView
+import android.view.TextureView
 import android.view.View
 import android.widget.ImageView
 import android.widget.Toast
@@ -16,20 +13,15 @@ import com.serenegiant.usb.USBMonitor
 import com.serenegiant.usb.UVCCamera
 import com.serenegiant.usb.UVCParam
 import kotlinx.coroutines.*
-import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
-import android.graphics.BitmapFactory
 
-/**
- * UsbCameraViewManager - Quản lý USB camera, nhận khung hình và gửi qua YOLO
- */
 class UsbCameraViewManager(
     private val context: Context,
-    private val surfaceView: SurfaceView,
+    private val textureView: TextureView,
     private val overlayView: OverlayView,
-    private val detectionManager: DetectionManager?,
+    var detectionManager: DetectionManager?,
     private val glassIcon: ImageView
-) {
+) : TextureView.SurfaceTextureListener {
 
     interface CameraStateListener {
         fun onCameraConnected()
@@ -39,153 +31,187 @@ class UsbCameraViewManager(
 
     private var cameraStateListener: CameraStateListener? = null
     fun setOnCameraStateListener(listener: CameraStateListener) {
-        this.cameraStateListener = listener
+        cameraStateListener = listener
     }
 
     private var uvcCamera: UVCCamera? = null
     private var usbMonitor: USBMonitor? = null
-    private val mainHandler = Handler(Looper.getMainLooper())
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
-    private var previewWidth = 1280
-    private var previewHeight = 720
+    private var previewWidth = 1920
+    private var previewHeight = 1080
+    private var surfaceReady = false
 
-    /** Bắt đầu camera USB */
-    fun startCamera() {
-        try {
-            usbMonitor = USBMonitor(context, object : USBMonitor.OnDeviceConnectListener {
-                override fun onAttach(device: UsbDevice) {
-                    Toast.makeText(context, "Phát hiện USB Camera", Toast.LENGTH_SHORT).show()
-                    usbMonitor?.requestPermission(device)
-                }
+    // Flag để kiểm tra user có nhấn Connect không
+    var isUserRequestedConnect = false
 
-                override fun onDeviceOpen(
-                    device: UsbDevice,
-                    ctrlBlock: USBMonitor.UsbControlBlock,
-                    createNew: Boolean
-                ) {
-                    Toast.makeText(context, "Camera đã kết nối", Toast.LENGTH_SHORT).show()
-                    openCamera(ctrlBlock)
-                }
-
-                override fun onDeviceClose(
-                    device: UsbDevice,
-                    ctrlBlock: USBMonitor.UsbControlBlock
-                ) {
-                    Toast.makeText(context, "Camera bị ngắt kết nối", Toast.LENGTH_SHORT).show()
-                    showGlassIcon()
-                    cameraStateListener?.onCameraDisconnected()
-                }
-
-                override fun onDetach(device: UsbDevice) {
-                    Toast.makeText(context, "Camera bị tháo ra", Toast.LENGTH_SHORT).show()
-                    showGlassIcon()
-                    cameraStateListener?.onCameraDisconnected()
-                }
-
-                override fun onCancel(device: UsbDevice) {
-                    Toast.makeText(context, "Hủy quyền truy cập USB", Toast.LENGTH_SHORT).show()
-                    showGlassIcon()
-                    cameraStateListener?.onCameraError("Quyền USB bị hủy")
-                }
-            }, mainHandler)
-
-            usbMonitor?.register()
-            showGlassIcon()
-        } catch (e: Exception) {
-            Toast.makeText(context, "Lỗi khởi tạo camera: ${e.message}", Toast.LENGTH_SHORT).show()
-            e.printStackTrace()
-            showGlassIcon()
-            cameraStateListener?.onCameraError(e.message ?: "Lỗi không xác định")
-        }
+    fun initTextureView() {
+        textureView.surfaceTextureListener = this
     }
 
-    /** Mở camera sau khi được cấp quyền USB */
-    private fun openCamera(ctrlBlock: USBMonitor.UsbControlBlock?) {
-        try {
-            if (ctrlBlock == null) {
-                cameraStateListener?.onCameraError("UsbControlBlock null")
-                return
+    fun initUsbMonitor() {
+        if (usbMonitor != null) return
+
+        usbMonitor = USBMonitor(context, object : USBMonitor.OnDeviceConnectListener {
+            override fun onAttach(device: android.hardware.usb.UsbDevice) {
+                // Chỉ thông báo có camera, KHÔNG tự mở
+                Toast.makeText(context, "USB Camera detected: ${device.deviceName}", Toast.LENGTH_SHORT).show()
             }
 
-            // Khởi tạo UVCCamera với UVCParam mặc định
+            override fun onDeviceOpen(
+                device: android.hardware.usb.UsbDevice,
+                ctrlBlock: USBMonitor.UsbControlBlock,
+                createNew: Boolean
+            ) {
+                if (isUserRequestedConnect) {
+                    openCamera(ctrlBlock)
+                } else {
+                    // Nếu chưa nhấn Connect, chỉ đóng ctrlBlock thôi
+                    try { ctrlBlock.close() } catch (_: Exception) {}
+                }
+            }
+
+            override fun onDeviceClose(device: android.hardware.usb.UsbDevice, ctrlBlock: USBMonitor.UsbControlBlock) {
+                showGlassIcon()
+                cameraStateListener?.onCameraDisconnected()
+            }
+
+            override fun onDetach(device: android.hardware.usb.UsbDevice) {
+                showGlassIcon()
+                cameraStateListener?.onCameraDisconnected()
+            }
+
+            override fun onCancel(device: android.hardware.usb.UsbDevice) {
+                showGlassIcon()
+                cameraStateListener?.onCameraError("USB permission denied")
+            }
+        }, mainHandler)
+
+        usbMonitor?.register()
+        showGlassIcon()
+    }
+
+    fun startCamera() {
+        if (usbMonitor == null) initUsbMonitor()
+        val devices = usbMonitor?.deviceList
+        if (devices.isNullOrEmpty()) {
+            Toast.makeText(context, "No USB camera found", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // Đánh dấu user đã nhấn Connect
+        isUserRequestedConnect = true
+        usbMonitor?.requestPermission(devices[0])
+    }
+
+    private fun openCamera(ctrlBlock: USBMonitor.UsbControlBlock?) {
+        if (ctrlBlock == null) {
+            cameraStateListener?.onCameraError("UsbControlBlock null")
+            return
+        }
+
+        try {
             val param = UVCParam()
             uvcCamera = UVCCamera(param).apply {
                 open(ctrlBlock)
-                setPreviewSize(previewWidth, previewHeight, UVCCamera.FRAME_FORMAT_MJPEG)
-                setPreviewDisplay(surfaceView.holder)
-                startPreview()
 
-                surfaceView.visibility = View.VISIBLE
-                glassIcon.visibility = View.GONE
-                cameraStateListener?.onCameraConnected()
+                val supportedSizes = getSupportedSizeList()
+                val bestSize = supportedSizes?.filter { it.type == UVCCamera.DEFAULT_PREVIEW_FRAME_FORMAT }
+                    ?.minByOrNull { kotlin.math.abs(it.width - 1920) + kotlin.math.abs(it.height - 1080) }
+                    ?: supportedSizes?.firstOrNull()
 
-                // Nhận khung hình để phát hiện vật thể
-                setFrameCallback(IFrameCallback { buffer: ByteBuffer? ->
-                    if (buffer == null) return@IFrameCallback
-                    try {
-                        val bytes = ByteArray(buffer.remaining())
-                        buffer.get(bytes)
-                        val yuv = YuvImage(bytes, ImageFormat.NV21, previewWidth, previewHeight, null)
-                        val out = ByteArrayOutputStream()
-                        yuv.compressToJpeg(Rect(0, 0, previewWidth, previewHeight), 85, out)
-                        val jpegBytes = out.toByteArray()
-                        val bitmap = BitmapFactory.decodeByteArray(jpegBytes, 0, jpegBytes.size)
+                previewWidth = bestSize?.width ?: 1920
+                previewHeight = bestSize?.height ?: 1080
+                setPreviewSize(previewWidth, previewHeight, UVCCamera.DEFAULT_PREVIEW_FRAME_FORMAT)
 
-                        // Gửi frame qua YOLO
-                        scope.launch {
-                            detectionManager?.detectFrame(bitmap)
-                        }
-
-                        bitmap.recycle()
-                        out.close()
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                }, UVCCamera.PIXEL_FORMAT_NV21)
+                if (surfaceReady) {
+                    setPreviewTexture(textureView.surfaceTexture)
+                    startPreview()
+                }
             }
+
+            textureView.visibility = View.VISIBLE
+            glassIcon.visibility = View.GONE
+            cameraStateListener?.onCameraConnected()
+
+            // MJPEG frame callback
+            uvcCamera?.setFrameCallback(IFrameCallback { buffer: ByteBuffer? ->
+                if (buffer == null) return@IFrameCallback
+
+                try {
+                    val bytes = ByteArray(buffer.remaining())
+                    buffer.get(bytes)
+
+                    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    bitmap?.let {
+                        val bitmapCopy = it.copy(Bitmap.Config.ARGB_8888, true)
+                        scope.launch {
+                            detectionManager?.detectFrame(bitmapCopy)
+                            bitmapCopy.recycle()
+                        }
+                        it.recycle()
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }, UVCCamera.DEFAULT_PREVIEW_FRAME_FORMAT)
+
         } catch (e: Exception) {
-            Toast.makeText(context, "Lỗi mở camera: ${e.message}", Toast.LENGTH_SHORT).show()
             e.printStackTrace()
             showGlassIcon()
-            cameraStateListener?.onCameraError(e.message ?: "Không thể mở camera")
+            cameraStateListener?.onCameraError(e.message ?: "Cannot open camera")
         }
     }
 
-    /** Dừng camera */
     fun stopCamera() {
         try {
             uvcCamera?.stopPreview()
             uvcCamera?.destroy()
-        } catch (_: Exception) { }
+        } catch (_: Exception) {}
         uvcCamera = null
-        usbMonitor?.unregister()
-        usbMonitor = null
     }
 
-    /** Hiện icon kính khi camera dừng */
     fun showGlassIcon() {
-        try {
-            surfaceView.visibility = View.GONE
-            glassIcon.visibility = View.VISIBLE
-            overlayView.clear()
-            stopCamera()
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        textureView.visibility = View.GONE
+        glassIcon.visibility = View.VISIBLE
+        overlayView.clear()
+        stopCamera()
     }
 
-    /** Giải phóng toàn bộ */
     fun release() {
         stopCamera()
+        usbMonitor?.unregister()
+        usbMonitor = null
         scope.cancel()
+        isUserRequestedConnect = false
     }
 
-    /** Cập nhật kết quả nhận diện */
     fun setOverlayResults(results: List<BoundingBox>) {
         overlayView.setResults(results)
     }
 
     fun getOverlayWidth() = overlayView.width
     fun getOverlayHeight() = overlayView.height
+
+    override fun onSurfaceTextureAvailable(surface: SurfaceTexture, width: Int, height: Int) {
+        surfaceReady = true
+        uvcCamera?.apply {
+            try {
+                setPreviewTexture(surface)
+                startPreview()
+            } catch (e: Exception) {
+                e.printStackTrace()
+                cameraStateListener?.onCameraError("Cannot start preview")
+            }
+        }
+    }
+
+    override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) {}
+    override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean {
+        surfaceReady = false
+        stopCamera()
+        return true
+    }
+    override fun onSurfaceTextureUpdated(surface: SurfaceTexture) {}
 }

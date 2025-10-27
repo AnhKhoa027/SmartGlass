@@ -29,7 +29,7 @@
         android:layout_marginTop="30dp">
 
         <!-- ✅ SurfaceView cho AUSBC USB camera -->
-        <SurfaceView
+        <TextureView
             android:id="@+id/camera_view"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
