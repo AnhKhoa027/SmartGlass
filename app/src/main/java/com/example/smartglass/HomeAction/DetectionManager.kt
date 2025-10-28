@@ -146,6 +146,12 @@ class DetectionManager(
         return Bitmap.createBitmap(safeBitmap, left, top, right - left, bottom - top)
     }
 
+    /** ===== Thêm hàm fix khi stop camera để lần sau connect lại vẫn detect được ===== */
+    fun cancelAllTasks() {
+        scope.coroutineContext.cancelChildren()
+        isDetecting = false
+    }
+
     fun release() {
         detector.close()
         detectionSpeaker.stop()

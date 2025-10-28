@@ -14,6 +14,7 @@ import com.example.smartglass.TTSandSTT.VoiceResponder
 import com.example.smartglass.HomeAction.*
 import kotlinx.coroutines.*
 import android.view.TextureView
+import android.widget.Toast
 
 class HomeFragment : Fragment() {
 
@@ -128,6 +129,7 @@ class HomeFragment : Fragment() {
                         updateButtonState(R.string.connect, "#2F58C3", true)
                         usbCameraViewManager.showGlassIcon()
                         voiceResponder?.speak("Lỗi camera: $error")
+                        Toast.makeText(context, "Lỗi camera: $error", Toast.LENGTH_SHORT).show()
                     }
                 }
             })

@@ -1,3 +1,4 @@
+// ================= UsbCameraViewManager.kt =================
 package com.example.smartglass.HomeAction
 
 import android.content.Context
@@ -13,6 +14,7 @@ import com.serenegiant.usb.USBMonitor
 import com.serenegiant.usb.UVCCamera
 import com.serenegiant.usb.UVCParam
 import kotlinx.coroutines.*
+import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 
 class UsbCameraViewManager(
@@ -37,13 +39,10 @@ class UsbCameraViewManager(
     private var uvcCamera: UVCCamera? = null
     private var usbMonitor: USBMonitor? = null
     private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
-    private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
     private var previewWidth = 1920
     private var previewHeight = 1080
     private var surfaceReady = false
-
-    // Flag để kiểm tra user có nhấn Connect không
     var isUserRequestedConnect = false
 
     fun initTextureView() {
@@ -55,7 +54,6 @@ class UsbCameraViewManager(
 
         usbMonitor = USBMonitor(context, object : USBMonitor.OnDeviceConnectListener {
             override fun onAttach(device: android.hardware.usb.UsbDevice) {
-                // Chỉ thông báo có camera, KHÔNG tự mở
                 Toast.makeText(context, "USB Camera detected: ${device.deviceName}", Toast.LENGTH_SHORT).show()
             }
 
@@ -64,12 +62,8 @@ class UsbCameraViewManager(
                 ctrlBlock: USBMonitor.UsbControlBlock,
                 createNew: Boolean
             ) {
-                if (isUserRequestedConnect) {
-                    openCamera(ctrlBlock)
-                } else {
-                    // Nếu chưa nhấn Connect, chỉ đóng ctrlBlock thôi
-                    try { ctrlBlock.close() } catch (_: Exception) {}
-                }
+                if (isUserRequestedConnect) openCamera(ctrlBlock)
+                else try { ctrlBlock.close() } catch (_: Exception) {}
             }
 
             override fun onDeviceClose(device: android.hardware.usb.UsbDevice, ctrlBlock: USBMonitor.UsbControlBlock) {
@@ -100,8 +94,8 @@ class UsbCameraViewManager(
             return
         }
 
-        // Đánh dấu user đã nhấn Connect
         isUserRequestedConnect = true
+        surfaceReady = textureView.isAvailable
         usbMonitor?.requestPermission(devices[0])
     }
 
@@ -110,6 +104,8 @@ class UsbCameraViewManager(
             cameraStateListener?.onCameraError("UsbControlBlock null")
             return
         }
+
+        stopCamera() // <<< Thêm dòng này: đảm bảo camera cũ đã stop
 
         try {
             val param = UVCParam()
@@ -135,27 +131,24 @@ class UsbCameraViewManager(
             glassIcon.visibility = View.GONE
             cameraStateListener?.onCameraConnected()
 
-            // MJPEG frame callback
+            // <<< Thêm dòng này: gắn frame callback mới mỗi lần mở camera
             uvcCamera?.setFrameCallback(IFrameCallback { buffer: ByteBuffer? ->
                 if (buffer == null) return@IFrameCallback
 
-                try {
-                    val bytes = ByteArray(buffer.remaining())
-                    buffer.get(bytes)
+                val bytes = ByteArray(buffer.remaining())
+                buffer.get(bytes)
 
-                    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                try {
+                    val yuv = YuvImage(bytes, ImageFormat.NV21, previewWidth, previewHeight, null)
+                    val out = ByteArrayOutputStream()
+                    yuv.compressToJpeg(Rect(0, 0, previewWidth, previewHeight), 80, out)
+                    val bitmap = BitmapFactory.decodeByteArray(out.toByteArray(), 0, out.size())
+
                     bitmap?.let {
-                        val bitmapCopy = it.copy(Bitmap.Config.ARGB_8888, true)
-                        scope.launch {
-                            detectionManager?.detectFrame(bitmapCopy)
-                            bitmapCopy.recycle()
-                        }
-                        it.recycle()
+                        detectionManager?.detectFrame(it) // <<< Thêm dòng này
                     }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }, UVCCamera.DEFAULT_PREVIEW_FRAME_FORMAT)
+                } catch (e: Exception) { e.printStackTrace() }
+            }, UVCCamera.PIXEL_FORMAT_NV21)
 
         } catch (e: Exception) {
             e.printStackTrace()
@@ -170,6 +163,8 @@ class UsbCameraViewManager(
             uvcCamera?.destroy()
         } catch (_: Exception) {}
         uvcCamera = null
+
+        detectionManager?.cancelAllTasks() // <<< Thêm dòng này
     }
 
     fun showGlassIcon() {
@@ -183,7 +178,7 @@ class UsbCameraViewManager(
         stopCamera()
         usbMonitor?.unregister()
         usbMonitor = null
-        scope.cancel()
+        detectionManager?.cancelAllTasks()
         isUserRequestedConnect = false
     }
 

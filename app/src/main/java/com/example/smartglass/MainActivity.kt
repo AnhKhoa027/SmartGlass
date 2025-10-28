@@ -15,10 +15,13 @@ import com.example.smartglass.TTSandSTT.VoiceCommandProcessor
 import com.example.smartglass.TTSandSTT.VoiceRecognitionManager
 import com.example.smartglass.TTSandSTT.VoiceResponder
 import com.example.smartglass.TTSandSTT.WakeWordManager
+import android.util.Log
+import java.io.File
 import com.example.smartglass.HomeAction.GestureActionManager
 import com.example.smartglass.DetectResponse.GeminiChat
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.android.material.floatingactionbutton.FloatingActionButton
+import kotlinx.coroutines.*
 
 class MainActivity : AppCompatActivity() {
 
@@ -33,9 +36,10 @@ class MainActivity : AppCompatActivity() {
     private val REQUEST_CODE_MIC = 1001
     private val REQUEST_CODE_CAMERA = 1002
 
-    //API Gemini
     private val geminiApiKey = "AIzaSyCdB2dFJiYjBSL3X4-VKy3mz3jYxQ0kcIc"
     private lateinit var geminiChat: GeminiChat
+
+    private val mainScope = MainScope()
 
     private val voiceRecognitionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -57,41 +61,28 @@ class MainActivity : AppCompatActivity() {
 
         greeted = savedInstanceState?.getBoolean("greeted") ?: false
 
-        // Xử lý insets
+        // Insets
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
             insets
         }
 
-        // Khởi tạo TTS duy nhất
         voiceResponder = VoiceResponder(this)
-
-        // Khởi tạo Gemini
         geminiChat = GeminiChat(geminiApiKey)
 
-        // Load mặc định HomeFragment và truyền VoiceResponder
         val homeFragment = HomeFragment()
         homeFragment.setVoiceResponder(voiceResponder)
         supportFragmentManager.beginTransaction()
             .replace(R.id.frame_layout, homeFragment)
             .commit()
 
-        // BottomNavigationView
         bottomNavigationView = findViewById(R.id.bottom_navigation_view)
         bottomNavigationView.setOnItemSelectedListener { item ->
             val selectedFragment: Fragment = when (item.itemId) {
-                R.id.home -> {
-                    val frag = HomeFragment()
-                    frag.setVoiceResponder(voiceResponder)
-                    frag
-                }
+                R.id.home -> HomeFragment().apply { setVoiceResponder(voiceResponder) }
                 R.id.setting -> SettingFragment()
-                else -> {
-                    val frag = HomeFragment()
-                    frag.setVoiceResponder(voiceResponder)
-                    frag
-                }
+                else -> HomeFragment().apply { setVoiceResponder(voiceResponder) }
             }
             supportFragmentManager.beginTransaction()
                 .replace(R.id.frame_layout, selectedFragment)
@@ -99,10 +90,8 @@ class MainActivity : AppCompatActivity() {
             true
         }
 
-        // FloatingActionButton mic
         fabMic = findViewById(R.id.fabMic)
 
-        // Xin quyền Micro & Camera
         checkMicPermission()
         checkCameraPermission()
     }
@@ -158,7 +147,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // =================== VOICE ===================
     private fun initVoiceFeatures() {
         voiceRecognitionManager = VoiceRecognitionManager(this, voiceRecognitionLauncher)
 
@@ -181,45 +169,58 @@ class MainActivity : AppCompatActivity() {
 
         setupWakeWord()
 
-        val gestureManager = GestureActionManager(
+        GestureActionManager(
             rootView = findViewById(R.id.main),
             onHoldScreen = {
                 voiceResponder.speak("Bắt đầu nghe...")
                 voiceRecognitionManager.startListening()
             }
-        )
-        gestureManager.init()
+        ).init()
     }
 
     private fun handleTranscribedText(transcribed: String) {
         val handled = voiceCommandProcessor.handleCommand(transcribed)
-
         if (!handled) {
             voiceResponder.speak("Tôi hiểu.")
             geminiChat.sendMessageAsync(transcribed) { responseText ->
                 runOnUiThread {
-                    if (!responseText.isNullOrBlank()) {
-                        voiceResponder.speak(responseText)
-                    } else {
-                        voiceResponder.speak("Mình không nhận được phản hồi từ Gemini.")
-                    }
+                    voiceResponder.speak(responseText ?: "Mình không nhận được phản hồi từ Gemini.")
                 }
             }
         }
     }
 
     private fun setupWakeWord() {
-        wakeWordManager = WakeWordManager.createAndInit(
-            context = this,
-            accessKey = "LBKWPv6jiRpVsjkJp9wmYWhiv/H1dTxzzu6eQpOd++WZNm7kHMPUbw==",
-            onWakeWordDetected = {
-                voiceResponder.speak("Tôi đang nghe...") {
+        try {
+            val keywordFile = File(filesDir, "Hey-bro_en_android_v3_0_0.ppn")
+            if (!keywordFile.exists()) {
+                assets.open("Hey-bro_en_android_v3_0_0.ppn").use { input ->
+                    keywordFile.outputStream().use { output -> input.copyTo(output) }
+                }
+                Log.d("WakeWord", "Copied keyword file: ${keywordFile.absolutePath}")
+            }
+
+            wakeWordManager = WakeWordManager(
+                context = this,
+                accessKey = "hLZGtiHDanHSCjuPWn2OuRD+uSdkonFNGerPVeDQniPNFT1evnDjVA==",
+                keywordFile = keywordFile.absolutePath,
+                sensitivity = 0.6f
+            ) {
+                runOnUiThread {
+                    voiceResponder.speak("Tôi đang nghe...")
                     voiceRecognitionManager.startListening()
                 }
             }
-        ) ?: run {
+
+            wakeWordManager?.let { manager ->
+                mainScope.launch(Dispatchers.Default) {
+                    try { manager.startListening() }
+                    catch (e: Exception) { Log.e("MainActivity", "WakeWord start failed: ${e.message}") }
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
             voiceResponder.speak("Không thể khởi tạo wake word, kiểm tra file ppn")
-            null
         }
     }
 
@@ -229,25 +230,28 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun sendCommandToHomeFragment(connect: Boolean, callback: (Boolean) -> Unit) {
-        val currentFragment = supportFragmentManager.findFragmentById(R.id.frame_layout) as? HomeFragment
-        currentFragment?.let {
+        (supportFragmentManager.findFragmentById(R.id.frame_layout) as? HomeFragment)?.let {
             if (connect) it.connectToUsbCam() else it.disconnectFromUsbCam()
         }
     }
 
     override fun onPause() {
         super.onPause()
-        wakeWordManager?.stopListening()
-    }
-
-    override fun onResume() {
-        super.onResume()
-        wakeWordManager?.startListening()
+        wakeWordManager?.let { manager ->
+            mainScope.launch(Dispatchers.Default) {
+                try { manager.stopListening() } catch (_: Exception) {}
+            }
+        }
     }
 
     override fun onDestroy() {
         super.onDestroy()
         voiceResponder.shutdown()
-        wakeWordManager?.stopListening()
+        mainScope.cancel() // Hủy tất cả coroutine
+        wakeWordManager?.let { manager ->
+            mainScope.launch(Dispatchers.Default) {
+                try { manager.stopListening() } catch (_: Exception) {}
+            }
+        }
     }
 }
