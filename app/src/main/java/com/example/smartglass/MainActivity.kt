@@ -11,17 +11,14 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
-import com.example.smartglass.TTSandSTT.VoiceCommandProcessor
-import com.example.smartglass.TTSandSTT.VoiceRecognitionManager
-import com.example.smartglass.TTSandSTT.VoiceResponder
-import com.example.smartglass.TTSandSTT.WakeWordManager
-import android.util.Log
-import java.io.File
+import com.example.smartglass.TTSandSTT.*
 import com.example.smartglass.HomeAction.GestureActionManager
 import com.example.smartglass.DetectResponse.GeminiChat
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import kotlinx.coroutines.*
+import android.util.Log
+import java.io.File
 
 class MainActivity : AppCompatActivity() {
 
@@ -33,8 +30,7 @@ class MainActivity : AppCompatActivity() {
     private var wakeWordManager: WakeWordManager? = null
 
     private var greeted = false
-    private val REQUEST_CODE_MIC = 1001
-    private val REQUEST_CODE_CAMERA = 1002
+    private val REQUEST_CODE_ALL = 1001
 
     private val geminiApiKey = "AIzaSyCdB2dFJiYjBSL3X4-VKy3mz3jYxQ0kcIc"
     private lateinit var geminiChat: GeminiChat
@@ -61,7 +57,6 @@ class MainActivity : AppCompatActivity() {
 
         greeted = savedInstanceState?.getBoolean("greeted") ?: false
 
-        // Insets
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
@@ -92,33 +87,41 @@ class MainActivity : AppCompatActivity() {
 
         fabMic = findViewById(R.id.fabMic)
 
-        checkMicPermission()
-        checkCameraPermission()
+        checkAndRequestPermissions()
     }
 
-    private fun checkMicPermission() {
+    /** =============================
+     *      XIN QUYỀN 1 LẦN DUY NHẤT
+     * ============================= */
+    private fun checkAndRequestPermissions() {
+        val permissionsNeeded = mutableListOf<String>()
+
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED
         ) {
-            ActivityCompat.requestPermissions(
-                this,
-                arrayOf(Manifest.permission.RECORD_AUDIO),
-                REQUEST_CODE_MIC
-            )
-        } else {
-            initVoiceFeatures()
+            permissionsNeeded.add(Manifest.permission.RECORD_AUDIO)
         }
-    }
 
-    private fun checkCameraPermission() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
             != PackageManager.PERMISSION_GRANTED
         ) {
+            permissionsNeeded.add(Manifest.permission.CAMERA)
+        }
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            permissionsNeeded.add(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
+
+        if (permissionsNeeded.isNotEmpty()) {
             ActivityCompat.requestPermissions(
                 this,
-                arrayOf(Manifest.permission.CAMERA),
-                REQUEST_CODE_CAMERA
+                permissionsNeeded.toTypedArray(),
+                REQUEST_CODE_ALL
             )
+        } else {
+            initVoiceFeatures()
         }
     }
 
@@ -128,21 +131,27 @@ class MainActivity : AppCompatActivity() {
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        when (requestCode) {
-            REQUEST_CODE_MIC -> {
-                if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    voiceResponder.speak("Đã cấp quyền micro, tôi sẵn sàng.")
-                    initVoiceFeatures()
-                } else {
-                    voiceResponder.speak("Bạn cần cấp quyền micro để dùng giọng nói.")
+
+        if (requestCode == REQUEST_CODE_ALL) {
+            var micGranted = false
+            var camGranted = false
+            var locGranted = false
+
+            for (i in permissions.indices) {
+                when (permissions[i]) {
+                    Manifest.permission.RECORD_AUDIO -> micGranted = grantResults[i] == PackageManager.PERMISSION_GRANTED
+                    Manifest.permission.CAMERA -> camGranted = grantResults[i] == PackageManager.PERMISSION_GRANTED
+                    Manifest.permission.ACCESS_FINE_LOCATION -> locGranted = grantResults[i] == PackageManager.PERMISSION_GRANTED
                 }
             }
-            REQUEST_CODE_CAMERA -> {
-                if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    voiceResponder.speak("Đã cấp quyền camera.")
-                } else {
-                    voiceResponder.speak("Bạn cần cấp quyền camera để sử dụng camera.")
-                }
+
+            if (micGranted && camGranted && locGranted) {
+                voiceResponder.speak("Đã cấp quyền micro, camera và vị trí. Tôi sẵn sàng.")
+                initVoiceFeatures()
+            } else {
+                if (!micGranted) voiceResponder.speak("Bạn cần cấp quyền micro để dùng giọng nói.")
+                if (!camGranted) voiceResponder.speak("Bạn cần cấp quyền camera để sử dụng camera.")
+                if (!locGranted) voiceResponder.speak("Bạn cần cấp quyền vị trí để định vị.")
             }
         }
     }
@@ -192,9 +201,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupWakeWord() {
         try {
-            val keywordFile = File(filesDir, "Hey-bro_en_android_v3_0_0.ppn")
+            val keywordFile = File(filesDir, "Hey-Bro_en_android_v3_0_0.ppn")
             if (!keywordFile.exists()) {
-                assets.open("Hey-bro_en_android_v3_0_0.ppn").use { input ->
+                assets.open("Hey-Bro_en_android_v3_0_0.ppn").use { input ->
                     keywordFile.outputStream().use { output -> input.copyTo(output) }
                 }
                 Log.d("WakeWord", "Copied keyword file: ${keywordFile.absolutePath}")
@@ -202,31 +211,30 @@ class MainActivity : AppCompatActivity() {
 
             wakeWordManager = WakeWordManager(
                 context = this,
-                accessKey = "hLZGtiHDanHSCjuPWn2OuRD+uSdkonFNGerPVeDQniPNFT1evnDjVA==",
+                accessKey = "QPkiS5pipYowwOqxFnT1fp9nb3LJ/9GwcKoZetAqkks1O7gGCtJPhQ==",
                 keywordFile = keywordFile.absolutePath,
                 sensitivity = 0.6f
             ) {
                 runOnUiThread {
-                    voiceResponder.speak("Tôi đang nghe...")
-                    voiceRecognitionManager.startListening()
+                    voiceResponder.speak("Tôi đang nghe...") {
+                        voiceRecognitionManager.startListening()
+                    }
                 }
             }
 
             wakeWordManager?.let { manager ->
                 mainScope.launch(Dispatchers.Default) {
-                    try { manager.startListening() }
-                    catch (e: Exception) { Log.e("MainActivity", "WakeWord start failed: ${e.message}") }
+                    try {
+                        manager.startListening()
+                    } catch (e: Exception) {
+                        Log.e("MainActivity", "WakeWord start failed: ${e.message}")
+                    }
                 }
             }
         } catch (e: Exception) {
             e.printStackTrace()
             voiceResponder.speak("Không thể khởi tạo wake word, kiểm tra file ppn")
         }
-    }
-
-    override fun onSaveInstanceState(outState: Bundle) {
-        super.onSaveInstanceState(outState)
-        outState.putBoolean("greeted", greeted)
     }
 
     private fun sendCommandToHomeFragment(connect: Boolean, callback: (Boolean) -> Unit) {
@@ -239,19 +247,27 @@ class MainActivity : AppCompatActivity() {
         super.onPause()
         wakeWordManager?.let { manager ->
             mainScope.launch(Dispatchers.Default) {
-                try { manager.stopListening() } catch (_: Exception) {}
+                try {
+                    manager.stopListening()
+                } catch (_: Exception) {}
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        wakeWordManager?.startListening()
     }
 
     override fun onDestroy() {
         super.onDestroy()
         voiceResponder.shutdown()
-        mainScope.cancel() // Hủy tất cả coroutine
-        wakeWordManager?.let { manager ->
-            mainScope.launch(Dispatchers.Default) {
-                try { manager.stopListening() } catch (_: Exception) {}
-            }
-        }
+        mainScope.cancel()
+        wakeWordManager?.stopListening()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putBoolean("greeted", greeted)
     }
 }

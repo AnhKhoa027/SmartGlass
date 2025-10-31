@@ -9,9 +9,7 @@ class SettingsManager private constructor(private val context: Context) {
 
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    // ----------------------------
-    // STATEFLOW
-    // ----------------------------
+
     private val _volumeFlow = MutableStateFlow(getVolumeFromPrefs())
     val volumeFlow: StateFlow<Int> = _volumeFlow.asStateFlow()
 
@@ -53,9 +51,6 @@ class SettingsManager private constructor(private val context: Context) {
 
     fun getVolumeFloat(): Float = getVolume() / 100f
 
-    // ----------------------------
-    // HELPER
-    // ----------------------------
     private fun getVolumeFromPrefs() = prefs.getInt(KEY_VOLUME, DEFAULT_VOLUME).coerceIn(MIN_VOLUME, MAX_VOLUME)
     private fun getSpeedFromPrefs() = prefs.getString(KEY_SPEED, DEFAULT_SPEED) ?: DEFAULT_SPEED
     private fun isKeepScreenOnFromPrefs() = prefs.getBoolean(KEY_KEEP_SCREEN_ON, false)

@@ -10,6 +10,7 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import com.example.smartglass.SettingAction.SettingsManager
 import com.example.smartglass.TTSandSTT.VoiceResponder
+import kotlinx.coroutines.launch
 
 class SettingFragment : Fragment() {
 
@@ -19,6 +20,9 @@ class SettingFragment : Fragment() {
     private lateinit var settingsManager: SettingsManager
     private lateinit var voiceResponder: VoiceResponder
     private var wakeLock: PowerManager.WakeLock? = null
+
+    private var ignoreCheckChange = false
+    private var isUiInitialized = false
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -41,14 +45,15 @@ class SettingFragment : Fragment() {
     }
 
     private fun observeSettings() {
-        viewLifecycleOwner.lifecycleScope.launchWhenStarted {
+        viewLifecycleOwner.lifecycleScope.launch {
             settingsManager.volumeFlow.collect { vol ->
                 if (seekBarVolume.progress != vol) seekBarVolume.progress = vol
             }
         }
-        viewLifecycleOwner.lifecycleScope.launchWhenStarted {
+
+        viewLifecycleOwner.lifecycleScope.launch {
             settingsManager.speedFlow.collect { speed ->
-                tvTocDoDoc.text = when(speed) {
+                tvTocDoDoc.text = when (speed) {
                     "very_slow" -> "Tốc độ đọc: Rất chậm"
                     "slow" -> "Tốc độ đọc: Chậm"
                     "fast" -> "Tốc độ đọc: Nhanh"
@@ -57,10 +62,14 @@ class SettingFragment : Fragment() {
                 }
             }
         }
-        viewLifecycleOwner.lifecycleScope.launchWhenStarted {
+
+        viewLifecycleOwner.lifecycleScope.launch {
             settingsManager.keepScreenOnFlow.collect { enabled ->
-                if (cbUnlockDevice.isChecked != enabled) cbUnlockDevice.isChecked = enabled
+                ignoreCheckChange = true
+                cbUnlockDevice.isChecked = enabled
+                ignoreCheckChange = false
                 applyKeepScreenOn(enabled)
+                isUiInitialized = true
             }
         }
     }
@@ -73,6 +82,7 @@ class SettingFragment : Fragment() {
                     voiceResponder.speak("Âm lượng hiện tại là $progress phần trăm.")
                 }
             }
+
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         })
@@ -80,8 +90,13 @@ class SettingFragment : Fragment() {
         tvTocDoDoc.setOnClickListener { showSpeedSelectionDialog() }
 
         cbUnlockDevice.setOnCheckedChangeListener { _, isChecked ->
+            if (!isUiInitialized || ignoreCheckChange) return@setOnCheckedChangeListener
+
             settingsManager.setKeepScreenOn(isChecked)
-            val msg = if (isChecked) "Thiết bị sẽ luôn sáng." else "Thiết bị có thể tự khóa màn hình."
+            val msg = if (isChecked)
+                "Thiết bị sẽ luôn sáng."
+            else
+                "Thiết bị có thể tự khóa màn hình."
             voiceResponder.speak(msg)
         }
     }
@@ -162,17 +177,16 @@ class SettingFragment : Fragment() {
             val memberView = layoutInflater.inflate(R.layout.item_member, container, false)
             memberView.findViewById<ImageView>(R.id.img_avatar).setImageResource(member.avatarRes)
             memberView.findViewById<TextView>(R.id.tv_name).text = member.name
-            memberView.findViewById<TextView>(R.id.tv_info).text = "${member.studentId} - ${member.role}"
+            memberView.findViewById<TextView>(R.id.tv_info).text =
+                "${member.studentId} - ${member.role}"
             container.addView(memberView)
         }
 
-        val dialog = androidx.appcompat.app.AlertDialog.Builder(requireContext())
+        val dialog = AlertDialog.Builder(requireContext())
             .setView(dialogView)
             .setPositiveButton("Đóng", null)
             .create()
 
-        // Animation mở Dialog
         dialog.show()
     }
-
 }
