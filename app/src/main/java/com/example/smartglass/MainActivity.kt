@@ -211,12 +211,12 @@ class MainActivity : AppCompatActivity() {
 
             wakeWordManager = WakeWordManager(
                 context = this,
-                accessKey = "QPkiS5pipYowwOqxFnT1fp9nb3LJ/9GwcKoZetAqkks1O7gGCtJPhQ==",
+                accessKey = "LBKWPv6jiRpVsjkJp9wmYWhiv/H1dTxzzu6eQpOd++WZNm7kHMPUbw==",
                 keywordFile = keywordFile.absolutePath,
                 sensitivity = 0.6f
             ) {
                 runOnUiThread {
-                    voiceResponder.speak("Tôi đang nghe...") {
+                    voiceResponder.speak("Tôi đang nghe..."){
                         voiceRecognitionManager.startListening()
                     }
                 }
