@@ -48,7 +48,6 @@ class DetectionManager(
                         } else box
 
                     }
-
                     withContext(Dispatchers.Main) {
                         cameraViewManager.setOverlayResults(updatedBoxes)
                         val labels = tracked.joinToString { it.smoothBox.clsName }

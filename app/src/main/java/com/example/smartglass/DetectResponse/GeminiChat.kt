@@ -1,148 +1,3 @@
-//package com.example.smartglass.DetectResponse
-//
-//import android.util.Log
-//import com.google.gson.JsonParser
-//import okhttp3.Call
-//import okhttp3.Callback
-//import okhttp3.MediaType.Companion.toMediaType
-//import okhttp3.OkHttpClient
-//import okhttp3.Request
-//import okhttp3.RequestBody.Companion.toRequestBody
-//import okhttp3.Response
-//import java.io.IOException
-//
-//class GeminiChat(private val apiKey: String) {
-//
-//    private val client = OkHttpClient()
-//    private val apiUrl =
-//        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
-//
-//    fun sendMessageSync(prompt: String): String? {
-//        val jsonBody = """
-//            {
-//              "contents": [
-//                {
-//                  "parts": [
-//                    { "text": "$prompt" }
-//                  ]
-//                }
-//              ]
-//            }
-//        """.trimIndent()
-//
-//        val body = jsonBody.toRequestBody("application/json".toMediaType())
-//
-//        val request = Request.Builder()
-//            .url(apiUrl)
-//            .addHeader("x-goog-api-key", apiKey)
-//            .addHeader("Content-Type", "application/json")
-//            .post(body)
-//            .build()
-//
-//        client.newCall(request).execute().use { response ->
-//            if (!response.isSuccessful) {
-//                Log.e("GeminiChat", "Request failed: ${response.code}")
-//                Log.e("GeminiChat", response.body?.string() ?: "No body")
-//                return null
-//            }
-//
-//            val responseBody = response.body?.string() ?: return null
-//            Log.d("GeminiRaw", "Gemini raw response: $responseBody")
-//
-//            val textResponse = extractTextResponse(responseBody)
-//            Log.d("GeminiChat", "Gemini trả lời: $textResponse")
-//
-//            return textResponse
-//        }
-//    }
-//
-//    fun sendMessageAsync(prompt: String, callback: (String?) -> Unit) {
-//        val jsonBody = """
-//            {
-//              "contents": [
-//                {
-//                  "parts": [
-//                    { "text": "$prompt" }
-//                  ]
-//                }
-//              ]
-//            }
-//        """.trimIndent()
-//
-//        val body = jsonBody.toRequestBody("application/json".toMediaType())
-//        val request = Request.Builder()
-//            .url(apiUrl)
-//            .addHeader("x-goog-api-key", apiKey)
-//            .addHeader("Content-Type", "application/json")
-//            .post(body)
-//            .build()
-//
-//        client.newCall(request).enqueue(object : Callback {
-//            override fun onFailure(call: Call, e: IOException) {
-//                e.printStackTrace()
-//                callback(null)
-//            }
-//
-//            override fun onResponse(call: Call, response: Response) {
-//                response.use {
-//                    val responseBody = response.body?.string() ?: ""
-//                    Log.d("GeminiRaw", "Gemini raw response: $responseBody")
-//
-//                    if (!response.isSuccessful) {
-//                        Log.e("GeminiChat", "Request failed: ${response.code}")
-//                        callback(null)
-//                        return
-//                    }
-//
-//                    try {
-//                        val textResponse = extractTextResponse(responseBody)
-//                        Log.d("GeminiChat", "Gemini trả lời: $textResponse")
-//
-//                        val cleaned = cleanResponse(textResponse)
-//                        callback(cleaned)
-//                    } catch (e: Exception) {
-//                        Log.e("GeminiChat", "Lỗi khi parse JSON: ${e.message}")
-//                        callback(null)
-//                    }
-//                }
-//            }
-//        })
-//    }
-//
-//    private fun extractTextResponse(responseBody: String): String? {
-//        return try {
-//            val json = JsonParser.parseString(responseBody).asJsonObject
-//            json["candidates"]
-//                ?.asJsonArray?.get(0)?.asJsonObject
-//                ?.getAsJsonObject("content")?.getAsJsonArray("parts")
-//                ?.get(0)?.asJsonObject?.get("text")?.asString
-//        } catch (e: Exception) {
-//            Log.e("GeminiChat", "Lỗi extractTextResponse: ${e.message}")
-//            null
-//        }
-//    }
-//    private fun cleanResponse(text: String?): String? {
-//        if (text == null) return null
-//        return text
-//            .replace("**", "")
-//            .replace("__", "")
-//            .replace("*", "")
-//            .replace("_", "")
-//            .replace(Regex("\\s+"), " ")
-//            .trim()
-//    }
-//    fun analyzeUserCommand(command: String, callback: (String?) -> Unit) {
-//        val prompt = """
-//        Câu nói: "$command"
-//    """.trimIndent()
-//
-//        sendMessageAsync(prompt) { response ->
-//            callback(response)
-//        }
-//    }
-//}
-
-
 package com.example.smartglass.DetectResponse
 
 import android.util.Log
@@ -258,7 +113,7 @@ class GeminiChat(private val apiKey: String) {
         })
     }
 
-    // ---------------------- 🔹 HÀM PHÂN TÍCH JSON ----------------------
+    // ----------------------  HÀM PHÂN TÍCH JSON ----------------------
     private fun extractTextResponse(responseBody: String): String? {
         return try {
             val json = JsonParser.parseString(responseBody).asJsonObject
@@ -290,7 +145,13 @@ class GeminiChat(private val apiKey: String) {
             .trim()
     }
 
-    // ---------------------- 🔹 HÀM PHÂN TÍCH LỆNH ----------------------
+    // ---------------------- TÁCH PHẦN JSON HỢP LỆ ----------------------
+    private fun extractValidJson(text: String): String {
+        val regex = Regex("\\{[\\s\\S]*\\}")
+        return regex.find(text)?.value ?: text
+    }
+
+    // ----------------------  HÀM PHÂN TÍCH LỆNH ----------------------
     fun analyzeUserCommand(command: String, callback: (String?) -> Unit) {
         val prompt = """
         Câu nói: "$command"
@@ -300,6 +161,61 @@ class GeminiChat(private val apiKey: String) {
 
         sendMessageAsync(prompt) { response ->
             callback(response)
+        }
+    }
+
+    fun analyzeIntent(command: String, callback: (List<Map<String, String>>?, String?) -> Unit) {
+
+        val prompt = """
+            Bạn là hệ thống hiểu ngôn ngữ tự nhiên cho kính thông minh NANA.
+            Hãy phân tích câu nói sau và trả về JSON hợp lệ.
+            
+            Câu nói: "$command"
+            
+            Cấu trúc JSON:
+            {
+              "actions": [
+                { "intent": "navigate", "target": "cài đặt", "value": "" },
+                { "intent": "adjust", "target": "âm lượng", "value": "giảm" }
+              ],
+              "response": "Tôi hiểu. Đang mở phần cài đặt và giảm âm lượng xuống 80%."
+            }
+            
+            - "actions": danh sách hành động cần thực hiện.
+            - "response": câu phản hồi tự nhiên NANA sẽ nói.
+            Trả về đúng JSON, không thêm chữ nào khác.
+            """.trimIndent()
+
+        sendMessageAsync(prompt) { response ->
+            if (response == null) {
+                callback(null, null)
+                return@sendMessageAsync
+            }
+            try {
+                val cleanJson = extractValidJson(response)
+                Log.d("GeminiChat", "Chuỗi JSON trích được: $cleanJson")
+
+                val json = JsonParser.parseString(cleanJson).asJsonObject
+                val actions = json["actions"]?.asJsonArray
+                val responseText = json["response"]?.asString ?: ""
+
+                val resultList = mutableListOf<Map<String, String>>()
+                actions?.forEach { el ->
+                    val obj = el.asJsonObject
+                    val map = mutableMapOf<String, String>()
+                    map["intent"] = obj["intent"]?.asString ?: ""
+                    map["target"] = obj["target"]?.asString ?: ""
+                    map["value"] = obj["value"]?.asString ?: ""
+                    resultList.add(map)
+                }
+
+                Log.d("GeminiChat", "Danh sách actions: $resultList")
+                callback(resultList, responseText)  //Đổi callback ở đây
+            } catch (e: Exception) {
+                Log.e("GeminiChat", "Lỗi parse JSON intent: ${e.message}")
+                callback(null, null)
+            }
+
         }
     }
 }

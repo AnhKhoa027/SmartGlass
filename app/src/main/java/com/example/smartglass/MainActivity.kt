@@ -19,6 +19,16 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton
 import kotlinx.coroutines.*
 import android.util.Log
 import java.io.File
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.Response
+import org.json.JSONObject
+import java.io.IOException
+
 
 class MainActivity : AppCompatActivity() {
 
@@ -28,12 +38,15 @@ class MainActivity : AppCompatActivity() {
     private lateinit var voiceResponder: VoiceResponder
     private lateinit var voiceRecognitionManager: VoiceRecognitionManager
     private var wakeWordManager: WakeWordManager? = null
+    private var isMicActive = false
 
     private var greeted = false
     private val REQUEST_CODE_ALL = 1001
 
     private val geminiApiKey = "AIzaSyCdB2dFJiYjBSL3X4-VKy3mz3jYxQ0kcIc"
     private lateinit var geminiChat: GeminiChat
+
+    private val client = OkHttpClient()
 
     private val mainScope = MainScope()
 
@@ -187,13 +200,37 @@ class MainActivity : AppCompatActivity() {
         ).init()
     }
 
+//    private fun handleTranscribedText(transcribed: String) {
+//        val handled = voiceCommandProcessor.handleCommand(transcribed)
+//        if (!handled) {
+//            voiceResponder.speak("Tôi hiểu.")
+//            geminiChat.sendMessageAsync(transcribed) { responseText ->
+//                runOnUiThread {
+//                    voiceResponder.speak(responseText ?: "Mình không nhận được phản hồi từ Gemini.")
+//                    isMicActive = false
+//                    wakeWordManager?.startListening()
+//                }
+//            }
+//        } else {
+//            // Nếu handled bởi command → cũng cần reset mic & wake word
+//            runOnUiThread {
+//                isMicActive = false
+//                wakeWordManager?.startListening()
+//            }
+//        }
+//    }
     private fun handleTranscribedText(transcribed: String) {
-        val handled = voiceCommandProcessor.handleCommand(transcribed)
-        if (!handled) {
-            voiceResponder.speak("Tôi hiểu.")
+        val handled = voiceCommandProcessor.handleCommand(transcribed) // kiểm tra nếu lệnh thuộc command
+        if (handled) {
+            voiceCommandProcessor.handleCommand(transcribed)
+
+//            voiceResponder.speak("Tôi hiểu") {
+//                voiceCommandProcessor.handleCommand(transcribed)
+//            }
+        } else {
             geminiChat.sendMessageAsync(transcribed) { responseText ->
                 runOnUiThread {
-                    voiceResponder.speak(responseText ?: "Mình không nhận được phản hồi từ Gemini.")
+                    responseText?.let { voiceResponder.speak(it) }
                 }
             }
         }
@@ -211,17 +248,17 @@ class MainActivity : AppCompatActivity() {
 
             wakeWordManager = WakeWordManager(
                 context = this,
-                accessKey = "LBKWPv6jiRpVsjkJp9wmYWhiv/H1dTxzzu6eQpOd++WZNm7kHMPUbw==",
+                accessKey = "vD4McLIN6iLsUZSYuGbFXAP7pOBbiJrde59Xh64PK03u3ive/Om3jg==",
                 keywordFile = keywordFile.absolutePath,
                 sensitivity = 0.6f
             ) {
                 runOnUiThread {
-                    voiceResponder.speak("Tôi đang nghe..."){
-                        voiceRecognitionManager.startListening()
+                        voiceResponder.speak("Tôi đang nghe...") {
+                            voiceRecognitionManager.startListening()
+                        }
                     }
-                }
-            }
 
+                }
             wakeWordManager?.let { manager ->
                 mainScope.launch(Dispatchers.Default) {
                     try {
@@ -256,7 +293,9 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        wakeWordManager?.startListening()
+        if (!isMicActive) {  // chỉ bật wake word khi mic chưa bật
+            wakeWordManager?.startListening()
+        }
     }
 
     override fun onDestroy() {
