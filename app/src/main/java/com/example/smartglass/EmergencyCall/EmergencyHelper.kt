@@ -18,19 +18,19 @@ class EmergencyHelper(private val context: Context) {
     fun triggerEmergency(callCount: Int = 1) {
         val contacts = EmergencyContactsManager(context).getContacts()
         if (contacts.isEmpty()) {
-            Log.e("EmergencyHelper", "⚠️ Không có số liên hệ khẩn cấp nào được lưu.")
+            Log.e("EmergencyHelper", "Không có số liên hệ khẩn cấp nào được lưu.")
             return
         }
 
         val locationHelper = LocationHelper(context)
         locationHelper.getCurrentLocation { loc ->
             val message = if (loc != null) {
-                "🚨 Tôi đang gặp nguy hiểm! Vị trí hiện tại: https://maps.google.com/?q=${loc.latitude},${loc.longitude}"
+                " Tôi tên là:.... Tôi là người Khiếm Thị. Hiện tại tôi đang gặp nguy hiểm. Hãy giúp tôi! Vị trí hiện tại: https://maps.google.com/?q=${loc.latitude},${loc.longitude}"
             } else {
-                "🚨 Tôi đang gặp nguy hiểm! Không xác định được vị trí hiện tại."
+                " Tôi tên là:.... Tôi là người Khiếm Thị. Hiện tại tôi đang gặp nguy hiểm. Hãy giúp tôi! Không xác định được vị trí hiện tại."
             }
 
-            Log.d("EmergencyHelper", "🔔 Gửi tin nhắn khẩn cấp: $message")
+            Log.d("EmergencyHelper", "Gửi tin nhắn khẩn cấp: $message")
 
             var count = 0
             for (phone in contacts) {

@@ -1,4 +1,5 @@
 package com.example.smartglass.EmergencyCall
+
 import android.content.Context
 
 class EmergencyContactsManager(context: Context) {

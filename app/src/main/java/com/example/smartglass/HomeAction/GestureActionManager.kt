@@ -1,45 +1,71 @@
 package com.example.smartglass.HomeAction
 
+import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.MotionEvent
 import android.view.View
-
-/**
- * Gesture Action Manager
- * -------------------
- * Đây là là nơi xử lý các tác động chạm đối với màn hình
- *
- * Nhiệm vụ:
- * - Giữ màn hình > 4 giây => Mở Google STT
- * - Vuốt 3 ngón từ trên xuống => tự động kết nối với kính thông minh
- */
+import android.widget.Toast
+import com.example.smartglass.EmergencyCall.EmergencyManager
 
 class GestureActionManager(
     private val rootView: View,
+    private val context: Context,
     private val onHoldScreen: (() -> Unit)? = null
 ) {
     private val handler = Handler(Looper.getMainLooper())
     private var isPressed = false
 
+    // Dùng cho nhấn 2 lần
+    private var lastPressTime: Long = 0
+    private var pressCount = 0
+    private val DOUBLE_PRESS_THRESHOLD = 300L // ms
+
     fun init() {
         rootView.setOnTouchListener { v, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
-                    isPressed = true
-                    handler.postDelayed({
-                        if (isPressed) {
-                            onHoldScreen?.invoke()
-                        }
-                    }, 4000) // giữ tay ≥ 4
+                    handleDoubleTap()
+                    handleLongPress()
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     isPressed = false
                     handler.removeCallbacksAndMessages(null)
-                    v.performClick() // để tránh warning accessibility
+                    v.performClick()
                 }
             }
             true
         }
     }
+
+    private fun handleLongPress() {
+        isPressed = true
+        handler.postDelayed({
+            if (isPressed) {
+                Log.d("GestureActionManager", "⏱ Giữ màn hình >4s")
+                onHoldScreen?.invoke()
+            }
+        }, 4000)
+    }
+
+    private fun handleDoubleTap() {
+        val currentTime = System.currentTimeMillis()
+        if (currentTime - lastPressTime <= DOUBLE_PRESS_THRESHOLD) {
+            pressCount++
+        } else {
+            pressCount = 1
+        }
+        lastPressTime = currentTime
+
+        if (pressCount == 2) {
+            pressCount = 0
+            Log.d("GestureActionManager", "Kích hoạt tính năng khẩn cấp")
+            Toast.makeText(context, "Kích hoạt khẩn cấp!", Toast.LENGTH_SHORT).show()
+
+            val manager = EmergencyManager(context)
+            manager.triggerEmergency()
+        }
+    }
 }
+

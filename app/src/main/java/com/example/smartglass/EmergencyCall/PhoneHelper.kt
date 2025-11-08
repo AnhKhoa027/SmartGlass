@@ -5,10 +5,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.provider.Settings
 import android.util.Log
-import androidx.core.content.ContextCompat
 import android.widget.Toast
+import androidx.core.content.ContextCompat
 
 object PhoneHelper {
     fun callPhone(context: Context, phone: String) {
@@ -16,7 +15,6 @@ object PhoneHelper {
             if (ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE)
                 != PackageManager.PERMISSION_GRANTED
             ) {
-                // Không có quyền gọi — bạn nên yêu cầu quyền ở UI (MainActivity)
                 Log.e("PhoneHelper", "CALL_PHONE permission not granted")
                 Toast.makeText(context, "Chưa cấp quyền gọi điện", Toast.LENGTH_SHORT).show()
                 return

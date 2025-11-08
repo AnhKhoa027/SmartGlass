@@ -94,6 +94,11 @@ class MainActivity : AppCompatActivity() {
     private fun checkAndRequestPermissions() {
         val permissionsNeeded = mutableListOf<String>()
 
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE)
+            != PackageManager.PERMISSION_GRANTED) {
+            permissionsNeeded.add(Manifest.permission.CALL_PHONE)
+        }
+
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED
         ) {
@@ -178,6 +183,7 @@ class MainActivity : AppCompatActivity() {
 
         GestureActionManager(
             rootView = findViewById(R.id.main),
+            context = this,
             onHoldScreen = {
                 voiceResponder.speak("Bắt đầu nghe...")
                 voiceRecognitionManager.startListening()
@@ -209,14 +215,17 @@ class MainActivity : AppCompatActivity() {
 
             wakeWordManager = WakeWordManager(
                 context = this,
-                accessKey = "LBKWPv6jiRpVsjkJp9wmYWhiv/H1dTxzzu6eQpOd++WZNm7kHMPUbw==",
+                // Key Khoaaa
+//                accessKey = "LBKWPv6jiRpVsjkJp9wmYWhiv/H1dTxzzu6eQpOd++WZNm7kHMPUbw==",
+                // Key Thanhhh
+                accessKey = "W8WX0LISM+lvDmBoZmZZFgzot+XezDl3EP4quWB4KCVNQ3klMjhOhw==",
                 keywordFile = keywordFile.absolutePath,
                 sensitivity = 0.6f
             ) {
                 runOnUiThread {
-                    voiceResponder.speak("Tôi đang nghe...")
+                    voiceResponder.speak("Tôi đang nghe..."){
                     voiceRecognitionManager.startListening()
-
+                }
                 }
             }
 
