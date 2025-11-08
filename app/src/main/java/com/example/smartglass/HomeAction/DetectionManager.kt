@@ -6,9 +6,7 @@ import com.example.smartglass.ObjectDetection.*
 import com.example.smartglass.DetectResponse.DetectionSpeaker
 import kotlinx.coroutines.*
 
-/**
- * DetectionManager (Optimized + Per-box fallback, YOLO realtime speak only)
- */
+
 class DetectionManager(
     context: Context,
     private val cameraViewManager: UsbCameraViewManager,
@@ -32,8 +30,7 @@ class DetectionManager(
                     val tracked = tracker.update(boundingBoxes)
                     val updatedBoxes = tracked.map { trackedObj ->
                         val box = trackedObj.smoothBox
-                        // Nếu YOLO không chắc → crop và classify fallback
-                        if (box.clsName == "Unknown" || box.cnf < 0.5f) {
+                        if (box.clsName == "Unknown" || box.cnf < 0.3f) {
                             val frameCopy = lastFrame?.takeIf { !it.isRecycled }?.copy(Bitmap.Config.ARGB_8888, false)
                             if (frameCopy != null) {
                                 try {
@@ -71,7 +68,6 @@ class DetectionManager(
 
     private val classifier = Classifier(context, "model_meta.tflite", "label_model.txt")
 
-    /** Nhận frame từ camera và chạy detect */
     fun detectFrame(bitmap: Bitmap) {
         if (isDetecting) return
         isDetecting = true
@@ -79,7 +75,7 @@ class DetectionManager(
 
         scope.launch(Dispatchers.Default) {
             try {
-                val inputSize = 640  // 224/ 320 /640
+                val inputSize = 640
                 val scaledBitmap = Bitmap.createScaledBitmap(bitmap, inputSize, inputSize, true)
 
                 detector.detect(scaledBitmap)
@@ -145,7 +141,6 @@ class DetectionManager(
         return Bitmap.createBitmap(safeBitmap, left, top, right - left, bottom - top)
     }
 
-    /** ===== Thêm hàm fix khi stop camera để lần sau connect lại vẫn detect được ===== */
     fun cancelAllTasks() {
         scope.coroutineContext.cancelChildren()
         isDetecting = false

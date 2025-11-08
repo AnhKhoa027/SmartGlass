@@ -134,7 +134,8 @@ class HomeFragment : Fragment() {
                 }
             })
 
-            usbCameraViewManager.startCamera() // chỉ mở camera khi nhấn Connect
+            usbCameraViewManager.startCamera()
+
 
         } catch (e: Exception) {
             e.printStackTrace()
@@ -147,7 +148,7 @@ class HomeFragment : Fragment() {
     }
 
     fun disconnectFromUsbCam() {
-        usbCameraViewManager.isUserRequestedConnect = false // reset flag
+        usbCameraViewManager.isUserRequestedConnect = false
         try { usbCameraViewManager.showGlassIcon(); usbCameraViewManager.release() } catch (_: Exception) {}
         detectionSpeaker?.stop()
         isConnected = false

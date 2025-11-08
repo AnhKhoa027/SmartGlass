@@ -1,4 +1,3 @@
-// ================= UsbCameraViewManager.kt =================
 package com.example.smartglass.HomeAction
 
 import android.content.Context
@@ -13,7 +12,6 @@ import com.serenegiant.usb.IFrameCallback
 import com.serenegiant.usb.USBMonitor
 import com.serenegiant.usb.UVCCamera
 import com.serenegiant.usb.UVCParam
-import kotlinx.coroutines.*
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 
@@ -54,7 +52,7 @@ class UsbCameraViewManager(
 
         usbMonitor = USBMonitor(context, object : USBMonitor.OnDeviceConnectListener {
             override fun onAttach(device: android.hardware.usb.UsbDevice) {
-                Toast.makeText(context, "USB Camera detected: ${device.deviceName}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "USB Camera Phát hiện: ${device.deviceName}", Toast.LENGTH_SHORT).show()
             }
 
             override fun onDeviceOpen(
@@ -78,7 +76,7 @@ class UsbCameraViewManager(
 
             override fun onCancel(device: android.hardware.usb.UsbDevice) {
                 showGlassIcon()
-                cameraStateListener?.onCameraError("USB permission denied")
+                cameraStateListener?.onCameraError("Quyền USB bị từ chối")
             }
         }, mainHandler)
 
@@ -90,7 +88,7 @@ class UsbCameraViewManager(
         if (usbMonitor == null) initUsbMonitor()
         val devices = usbMonitor?.deviceList
         if (devices.isNullOrEmpty()) {
-            Toast.makeText(context, "No USB camera found", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Không tìm thấy USB Camera", Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -105,7 +103,7 @@ class UsbCameraViewManager(
             return
         }
 
-        stopCamera() // <<< Thêm dòng này: đảm bảo camera cũ đã stop
+        stopCamera()
 
         try {
             val param = UVCParam()
@@ -131,7 +129,6 @@ class UsbCameraViewManager(
             glassIcon.visibility = View.GONE
             cameraStateListener?.onCameraConnected()
 
-            // <<< Thêm dòng này: gắn frame callback mới mỗi lần mở camera
             uvcCamera?.setFrameCallback(IFrameCallback { buffer: ByteBuffer? ->
                 if (buffer == null) return@IFrameCallback
 
@@ -153,7 +150,7 @@ class UsbCameraViewManager(
         } catch (e: Exception) {
             e.printStackTrace()
             showGlassIcon()
-            cameraStateListener?.onCameraError(e.message ?: "Cannot open camera")
+            cameraStateListener?.onCameraError(e.message ?: "Không thể mở Camera")
         }
     }
 
@@ -164,7 +161,7 @@ class UsbCameraViewManager(
         } catch (_: Exception) {}
         uvcCamera = null
 
-        detectionManager?.cancelAllTasks() // <<< Thêm dòng này
+        detectionManager?.cancelAllTasks()
     }
 
     fun showGlassIcon() {
@@ -197,7 +194,7 @@ class UsbCameraViewManager(
                 startPreview()
             } catch (e: Exception) {
                 e.printStackTrace()
-                cameraStateListener?.onCameraError("Cannot start preview")
+                cameraStateListener?.onCameraError("Không Thể mở Stream của Camera")
             }
         }
     }

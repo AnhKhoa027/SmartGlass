@@ -1,20 +1,20 @@
 package com.example.smartglass.ObjectDetection
 
 import android.content.Context
-import android.graphics.Bitmap
+import android.graphics.*
 import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.support.common.FileUtil
-import org.tensorflow.lite.support.image.TensorImage
 import org.tensorflow.lite.support.tensorbuffer.TensorBuffer
 import org.tensorflow.lite.DataType
-import java.nio.MappedByteBuffer
+import java.nio.*
 import java.nio.channels.FileChannel
 import java.io.FileInputStream
 
 /**
- * Classifier (Fallback)
- * ---------------------
- * Model phân loại vật thể đơn giản dùng sau YOLO và API.
+ * Classifier (for grayscale model: input [1,128,128,1])
+ * ----------------------------------------------------
+ * Model phân loại vật thể đơn giản sau YOLO hoặc dùng độc lập.
+ * Dành cho model_meta.tflite (float32 grayscale, 3 lớp)
  */
 class Classifier(
     private val context: Context,
@@ -23,11 +23,17 @@ class Classifier(
 ) {
     private val interpreter: Interpreter
     private val labels = mutableListOf<String>()
+    private val inputSize = 128
+    private val numChannels = 1
 
     init {
-        interpreter = Interpreter(loadModelFile(context, modelPath))
+        val options = Interpreter.Options().apply {
+            setNumThreads(2)
+            setUseNNAPI(true)
+        }
+        interpreter = Interpreter(loadModelFile(context, modelPath), options)
 
-        // Đọc nhãn từ file nếu có
+        // Đọc label file
         if (labelPath != null) {
             try {
                 labels.addAll(FileUtil.loadLabels(context, labelPath))
@@ -44,28 +50,45 @@ class Classifier(
         val fileDescriptor = context.assets.openFd(modelPath)
         val inputStream = FileInputStream(fileDescriptor.fileDescriptor)
         val fileChannel = inputStream.channel
-        val startOffset = fileDescriptor.startOffset
-        val declaredLength = fileDescriptor.declaredLength
-        return fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength)
+        return fileChannel.map(FileChannel.MapMode.READ_ONLY, fileDescriptor.startOffset, fileDescriptor.declaredLength)
+    }
+
+    /**
+     * Chuyển ảnh sang grayscale ByteBuffer để feed vào model
+     */
+    private fun convertToGrayscaleBuffer(bitmap: Bitmap): ByteBuffer {
+        val scaled = Bitmap.createScaledBitmap(bitmap, inputSize, inputSize, true)
+        val buffer = ByteBuffer.allocateDirect(4 * inputSize * inputSize * numChannels)
+        buffer.order(ByteOrder.nativeOrder())
+
+        val pixels = IntArray(inputSize * inputSize)
+        scaled.getPixels(pixels, 0, inputSize, 0, 0, inputSize, inputSize)
+        for (pixel in pixels) {
+            val r = (pixel shr 16 and 0xFF)
+            val g = (pixel shr 8 and 0xFF)
+            val b = (pixel and 0xFF)
+            val gray = (0.299f * r + 0.587f * g + 0.114f * b) / 255f
+            buffer.putFloat(gray)
+        }
+        buffer.rewind()
+        return buffer
     }
 
     /**
      * Phân loại ảnh → Trả về Pair(label, confidence)
      */
     fun classify(bitmap: Bitmap): Pair<String, Float> {
-        val inputSize = 128 // chỉnh theo model
-        val inputImage = TensorImage(DataType.FLOAT32)
-        inputImage.load(Bitmap.createScaledBitmap(bitmap, inputSize, inputSize, true))
-
+        val inputBuffer = convertToGrayscaleBuffer(bitmap)
         val outputBuffer = TensorBuffer.createFixedSize(intArrayOf(1, labels.size), DataType.FLOAT32)
 
-        interpreter.run(inputImage.buffer, outputBuffer.buffer.rewind())
+        interpreter.run(inputBuffer, outputBuffer.buffer)
 
-        val outputArray = outputBuffer.floatArray
-        val maxIndex = outputArray.indices.maxByOrNull { outputArray[it] } ?: 0
-        val confidence = outputArray[maxIndex]
-        val label = labels.getOrElse(maxIndex) { "Unknown" }
+        val outputs = outputBuffer.floatArray
+        val maxIdx = outputs.indices.maxByOrNull { outputs[it] } ?: 0
+        val confidence = outputs[maxIdx]
+        val label = labels.getOrElse(maxIdx) { "Unknown" }
 
+        println("Classifier → $label (${String.format("%.2f", confidence)})")
         return label to confidence
     }
 

@@ -59,13 +59,4 @@ class WakeWordManager(
         }
     }
 
-    fun destroy() {
-        try {
-            porcupineManager?.delete()
-            porcupineManager = null
-            Log.d("WakeWord", " WakeWordManager đã hủy tài nguyên.")
-        } catch (e: Exception) {
-            Log.e("WakeWordManager", "Lỗi khi delete Porcupine: ${e.message}")
-        }
-    }
 }
