@@ -8,13 +8,10 @@ class DetectionSpeaker(
     private val context: Context,
     private val voiceResponder: VoiceResponder
 ) {
-    var isPaused = false
     private var lastSpeakTime = 0L
-    private val speakInterval = 5000L
+    private val speakInterval = 2000L
 
     fun speakDetections(trackedObjects: List<TrackedObject>, frameW: Int, frameH: Int) {
-        if (isPaused) return
-
         val now = System.currentTimeMillis()
         if (now - lastSpeakTime < speakInterval || trackedObjects.isEmpty()) return
 
@@ -37,23 +34,10 @@ class DetectionSpeaker(
     }
 
     fun speak(message: String) {
-        if (!isPaused) voiceResponder.speak(message)
+        voiceResponder.speak(message)
     }
 
-    /** Tạm dừng TTS (ví dụ khi wake word gọi STT) */
-    fun pause() {
-        isPaused = true
-        voiceResponder.stopSpeaking()
-    }
-
-    /** Resume TTS khi xong STT */
-    fun resume() {
-        isPaused = false
-    }
-
-    /** Dừng hẳn TTS */
     fun stop() {
         lastSpeakTime = 0L
-        voiceResponder.stopSpeaking()
     }
 }

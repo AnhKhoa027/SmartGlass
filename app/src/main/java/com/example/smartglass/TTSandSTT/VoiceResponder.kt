@@ -76,12 +76,6 @@ class VoiceResponder(private val context: Context) : TextToSpeech.OnInitListener
         tts.speak(text, TextToSpeech.QUEUE_FLUSH, params, utteranceId)
     }
 
-    /** Dừng đọc ngay lập tức nhưng không shutdown TTS */
-    fun stopSpeaking() {
-        if (::tts.isInitialized) tts.stop()
-    }
-
-    /** Tắt hẳn TTS */
     fun shutdown() {
         if (::tts.isInitialized) {
             tts.stop()
