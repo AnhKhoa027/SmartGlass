@@ -136,7 +136,6 @@ class HomeFragment : Fragment() {
 
             usbCameraViewManager.startCamera()
 
-
         } catch (e: Exception) {
             e.printStackTrace()
             requireActivity().runOnUiThread {
@@ -154,6 +153,18 @@ class HomeFragment : Fragment() {
         isConnected = false
         updateButtonState(R.string.connect, "#2F58C3", true)
         voiceResponder?.speak("Đã ngắt kết nối")
+    }
+
+    fun pauseDetection() {
+        detectionManager?.pauseDetection()
+        detectionSpeaker?.isPaused = true
+        println("🟡 HomeFragment → pauseDetection() gọi thành công")
+    }
+
+    fun resumeDetection() {
+        detectionManager?.resumeDetection()
+        detectionSpeaker?.isPaused = false
+        println("🟢 HomeFragment → resumeDetection() gọi thành công")
     }
 
     override fun onDestroyView() {

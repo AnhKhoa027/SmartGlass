@@ -19,6 +19,7 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton
 import kotlinx.coroutines.*
 import android.util.Log
 import java.io.File
+import android.widget.Toast
 
 class MainActivity : AppCompatActivity() {
 
@@ -99,6 +100,21 @@ class MainActivity : AppCompatActivity() {
             permissionsNeeded.add(Manifest.permission.CALL_PHONE)
         }
 
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS)
+            != PackageManager.PERMISSION_GRANTED) {
+            permissionsNeeded.add(Manifest.permission.SEND_SMS)
+        }
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS)
+            != PackageManager.PERMISSION_GRANTED) {
+            permissionsNeeded.add(Manifest.permission.READ_CONTACTS)
+        }
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_CONTACTS)
+            != PackageManager.PERMISSION_GRANTED) {
+            permissionsNeeded.add(Manifest.permission.WRITE_CONTACTS)
+        }
+
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED
         ) {
@@ -139,22 +155,32 @@ class MainActivity : AppCompatActivity() {
             var micGranted = false
             var camGranted = false
             var locGranted = false
+            var callGranted = false
+            var smsGranted = false
+            var contactsGranted = false
 
             for (i in permissions.indices) {
                 when (permissions[i]) {
                     Manifest.permission.RECORD_AUDIO -> micGranted = grantResults[i] == PackageManager.PERMISSION_GRANTED
                     Manifest.permission.CAMERA -> camGranted = grantResults[i] == PackageManager.PERMISSION_GRANTED
                     Manifest.permission.ACCESS_FINE_LOCATION -> locGranted = grantResults[i] == PackageManager.PERMISSION_GRANTED
+                    Manifest.permission.CALL_PHONE -> callGranted = grantResults[i] == PackageManager.PERMISSION_GRANTED
+                    Manifest.permission.SEND_SMS -> smsGranted = grantResults[i] == PackageManager.PERMISSION_GRANTED
+                    Manifest.permission.READ_CONTACTS,
+                    Manifest.permission.WRITE_CONTACTS -> contactsGranted = grantResults[i] == PackageManager.PERMISSION_GRANTED
                 }
             }
 
-            if (micGranted && camGranted && locGranted) {
-                voiceResponder.speak("Đã cấp quyền micro, camera và vị trí. Tôi sẵn sàng.")
+            if (micGranted && camGranted && locGranted && callGranted && smsGranted && contactsGranted) {
+                voiceResponder.speak("Đã cấp tất cả quyền cần thiết. Tôi sẵn sàng.")
                 initVoiceFeatures()
             } else {
                 if (!micGranted) voiceResponder.speak("Bạn cần cấp quyền micro để dùng giọng nói.")
                 if (!camGranted) voiceResponder.speak("Bạn cần cấp quyền camera để sử dụng camera.")
                 if (!locGranted) voiceResponder.speak("Bạn cần cấp quyền vị trí để định vị.")
+                if (!callGranted) voiceResponder.speak("Bạn cần cấp quyền gọi điện để thực hiện cuộc gọi.")
+                if (!smsGranted) voiceResponder.speak("Bạn cần cấp quyền gửi tin nhắn để nhắn tin.")
+                if (!contactsGranted) voiceResponder.speak("Bạn cần cấp quyền danh bạ để truy cập danh bạ.")
             }
         }
     }
@@ -197,8 +223,16 @@ class MainActivity : AppCompatActivity() {
             voiceResponder.speak("Tôi hiểu.")
             geminiChat.sendMessageAsync(transcribed) { responseText ->
                 runOnUiThread {
-                    voiceResponder.speak(responseText ?: "Mình không nhận được phản hồi từ Gemini.")
+                    voiceResponder.speak(responseText ?: "Không có phản hồi từ Gemini.") {
+                        // 🔹 Khi STT xong, resume detect
+                        (supportFragmentManager.findFragmentById(R.id.frame_layout) as? HomeFragment)?.resumeDetection()
+                    }
                 }
+            }
+        }
+        else {
+            runOnUiThread {
+                (supportFragmentManager.findFragmentById(R.id.frame_layout) as? HomeFragment)?.resumeDetection()
             }
         }
     }
@@ -223,9 +257,10 @@ class MainActivity : AppCompatActivity() {
                 sensitivity = 0.6f
             ) {
                 runOnUiThread {
-                    voiceResponder.speak("Tôi đang nghe..."){
-                    voiceRecognitionManager.startListening()
-                }
+                    (supportFragmentManager.findFragmentById(R.id.frame_layout) as? HomeFragment)?.pauseDetection()
+                    voiceResponder.speak("Tôi đang nghe...") {
+                        voiceRecognitionManager.startListening()
+                    }
                 }
             }
 

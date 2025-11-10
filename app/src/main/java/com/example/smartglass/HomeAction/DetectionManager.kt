@@ -6,7 +6,6 @@ import com.example.smartglass.ObjectDetection.*
 import com.example.smartglass.DetectResponse.DetectionSpeaker
 import kotlinx.coroutines.*
 
-
 class DetectionManager(
     context: Context,
     private val cameraViewManager: UsbCameraViewManager,
@@ -18,6 +17,8 @@ class DetectionManager(
     var lastFrame: Bitmap? = null
     private var isDetecting = false
 
+    var isPausedForVoice = false
+
     // YOLO Detector
     private val detector = Detector(
         context = context,
@@ -26,6 +27,9 @@ class DetectionManager(
         detectorListener = object : Detector.DetectorListener {
 
             override fun onDetect(boundingBoxes: List<BoundingBox>, inferenceTime: Long) {
+                // nếu đang tạm dừng, bỏ qua xử lý
+                if (isPausedForVoice) return
+
                 scope.launch(Dispatchers.IO) {
                     val tracked = tracker.update(boundingBoxes)
                     val updatedBoxes = tracked.map { trackedObj ->
@@ -43,24 +47,28 @@ class DetectionManager(
                                 }
                             } else box
                         } else box
-
                     }
+
                     withContext(Dispatchers.Main) {
-                        cameraViewManager.setOverlayResults(updatedBoxes)
-                        val labels = tracked.joinToString { it.smoothBox.clsName }
-                        detectionSpeaker.speakDetections(
-                            tracked,
-                            cameraViewManager.getOverlayWidth(),
-                            cameraViewManager.getOverlayHeight()
-                        )
-                        println("YOLO detect done in ${inferenceTime}ms → $labels")
+                        if (!isPausedForVoice) { // chỉ cập nhật khi không bị pause
+                            cameraViewManager.setOverlayResults(updatedBoxes)
+                            val labels = tracked.joinToString { it.smoothBox.clsName }
+                            detectionSpeaker.speakDetections(
+                                tracked,
+                                cameraViewManager.getOverlayWidth(),
+                                cameraViewManager.getOverlayHeight()
+                            )
+                            println("YOLO detect done in ${inferenceTime}ms → $labels")
+                        }
                     }
                 }
             }
 
             override fun onEmptyDetect() {
-                cameraViewManager.setOverlayResults(emptyList())
-//                fallbackApiLastFrame()
+                if (!isPausedForVoice) {
+                    cameraViewManager.setOverlayResults(emptyList())
+//                  fallbackApiLastFrame()
+                }
             }
         },
         message = { println("Detector: $it") }
@@ -69,7 +77,8 @@ class DetectionManager(
     private val classifier = Classifier(context, "model_meta.tflite", "label_model.txt")
 
     fun detectFrame(bitmap: Bitmap) {
-        if (isDetecting) return
+        if (isPausedForVoice || isDetecting) return
+
         isDetecting = true
         lastFrame = bitmap
 
@@ -77,7 +86,6 @@ class DetectionManager(
             try {
                 val inputSize = 640
                 val scaledBitmap = Bitmap.createScaledBitmap(bitmap, inputSize, inputSize, true)
-
                 detector.detect(scaledBitmap)
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -149,5 +157,19 @@ class DetectionManager(
     fun release() {
         detector.close()
         detectionSpeaker.stop()
+    }
+
+    // 🔹 Thêm 2 hàm mới cho tạm dừng / tiếp tục detect
+    fun pauseDetection() {
+        isPausedForVoice = true
+        detectionSpeaker.isPaused = true
+        detectionSpeaker.stop()
+        println("🟡 Detection paused for voice input")
+    }
+
+    fun resumeDetection() {
+        isPausedForVoice = false
+        detectionSpeaker.isPaused = false
+        println("🟢 Detection resumed after voice input")
     }
 }
