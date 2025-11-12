@@ -163,11 +163,11 @@ class SettingFragment : Fragment() {
 
     private fun showDevTeamDialog() {
         val members = listOf(
-            DevMember("Lê Hòa Hiệp", "20231234", "Leader - AI Machine Development", R.drawable.hiep),
-            DevMember("Nguyễn Văn Hướng", "20231235", "Embedded software development", R.drawable.huong),
-            DevMember("Phạm Anh Khoa", "28211152934", "Android Development", R.drawable.khoa),
-            DevMember("Trương Công Thành", "20231237", "Sub Android Development - Collect Data", R.drawable.thanh),
-            DevMember("Nguyễn Tấn Việt", "20231238", "Sub Android Development - Train Model", R.drawable.viet),
+            DevMember("Lê Hòa Hiệp", "28219005065", "Leader - AI Machine Development", R.drawable.hiep),
+            DevMember("Nguyễn Văn Hướng", "28211152883", "Embedded software development", R.drawable.huong),
+            DevMember("Phạm Anh Khoa", "28211152934", "Frontend & Backend Android Development", R.drawable.khoa),
+            DevMember("Trương Công Thành", "28219043538", "Backend Android Development - Collect Data", R.drawable.thanh),
+            DevMember("Nguyễn Tấn Việt", "28211152290", "Backend Android Development - GPS Tracker", R.drawable.viet),
         )
 
         val dialogView = layoutInflater.inflate(R.layout.dialog_dev_team_card, null)

@@ -14,8 +14,7 @@
         android:layout_alignParentTop="true"
         android:layout_marginStart="25dp"
         android:layout_marginTop="19dp"
-        android:text="EdgeSight SmartGlass"
-        android:contentDescription="@string/smart_glass"
+        android:text="@string/app_title"
         android:textSize="30sp"
         android:textStyle="bold" />
 
@@ -28,14 +27,14 @@
         android:layout_centerHorizontal="true"
         android:layout_marginTop="30dp">
 
-        <!-- ✅ SurfaceView cho AUSBC USB camera -->
+        <!-- SurfaceView cho AUSBC USB camera -->
         <TextureView
             android:id="@+id/camera_view"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:visibility="visible" />
 
-        <!-- ✅ Overlay YOLO nằm trên SurfaceView -->
+        <!-- Overlay YOLO -->
         <com.example.smartglass.ObjectDetection.OverlayView
             android:id="@+id/overlay"
             android:layout_width="match_parent"
@@ -44,63 +43,54 @@
             android:clickable="false"
             android:focusable="false" />
 
-        <!-- ✅ Icon kính (hiện khi chưa kết nối) -->
+        <!-- Icon kính (hiện khi chưa kết nối) -->
         <ImageView
             android:id="@+id/glass_icon"
             android:layout_width="300dp"
             android:layout_height="300dp"
             android:layout_gravity="center"
             android:src="@drawable/sun_glass"
-            android:contentDescription="@string/glass_image"
-            android:visibility="visible" />
+            android:visibility="visible"
+            android:contentDescription="@string/glass_icon_desc" />
     </FrameLayout>
-
-<!--    &lt;!&ndash; IP hiển thị (Firebase IP) &ndash;&gt;-->
-<!--    <TextView-->
-<!--        android:id="@+id/tvCameraIp"-->
-<!--        android:layout_width="wrap_content"-->
-<!--        android:layout_height="wrap_content"-->
-<!--        android:text="IP: &#45;&#45;"-->
-<!--        android:textSize="20sp"-->
-<!--        android:layout_below="@id/cam_container"-->
-<!--        android:layout_centerHorizontal="true"-->
-<!--        android:layout_marginTop="10dp"/>-->
 
     <!-- Tên thiết bị -->
     <TextView
         android:id="@+id/device_name"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="My SmartGlass"
-        android:contentDescription="@string/my_smart_glass"
+        android:text="@string/device_name"
         android:textSize="30sp"
         android:textStyle="bold"
         android:layout_below="@id/cam_container"
         android:layout_centerHorizontal="true"
         android:layout_marginTop="30dp" />
 
-    <!-- Icon bluetooth + wifi -->
+    <!-- ✅ Trạng thái USB Camera -->
     <LinearLayout
-        android:id="@+id/icon_container"
+        android:id="@+id/camera_status_container"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_below="@id/device_name"
         android:layout_centerHorizontal="true"
         android:orientation="horizontal"
-        android:layout_marginTop="12dp">
+        android:gravity="center_vertical"
+        android:layout_marginTop="20dp">
 
-        <ImageView
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:src="@drawable/bluetooth"
-            android:contentDescription="@string/icon_bluetooth" />
+        <View
+            android:id="@+id/camera_status_dot"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:background="@drawable/status_dot_gray"
+            android:layout_marginEnd="10dp" />
 
-        <ImageView
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:layout_marginStart="20dp"
-            android:src="@drawable/wifi_icon"
-            android:contentDescription="@string/icon_wifi" />
+        <TextView
+            android:id="@+id/camera_status_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/camera_not_connected"
+            android:textSize="15sp"
+            android:textColor="@android:color/black" />
     </LinearLayout>
 
     <!-- Nút kết nối -->
@@ -108,11 +98,10 @@
         android:id="@+id/btnConnect"
         android:layout_width="350dp"
         android:layout_height="150dp"
-        android:layout_below="@id/icon_container"
+        android:layout_below="@id/camera_status_container"
         android:layout_centerHorizontal="true"
         android:layout_marginTop="30dp"
-        android:text="Kết nối"
-        android:contentDescription="@string/btn_connect"
+        android:text="@string/connect_button"
         android:textSize="45sp"
         android:enabled="true"
         android:backgroundTint="@color/button_on_color"

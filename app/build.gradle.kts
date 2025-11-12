@@ -61,7 +61,7 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
     implementation("com.android.volley:volley:1.2.1")
 
-    implementation("ai.picovoice:porcupine-android:3.0.0")
+    implementation("ai.picovoice:porcupine-android:3.0.3")
 
     implementation("org.tensorflow:tensorflow-lite:2.16.1")
     implementation("org.tensorflow:tensorflow-lite-support:0.4.4")

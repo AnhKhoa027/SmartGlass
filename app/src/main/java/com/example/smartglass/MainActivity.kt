@@ -248,9 +248,8 @@ class MainActivity : AppCompatActivity() {
                 sensitivity = 0.6f
             ) {
                 runOnUiThread {
-                    voiceResponder.speak("Tôi đang nghe..."){
+                    voiceResponder.speak("Tôi đang nghe...")
                     voiceRecognitionManager.startListening()
-                }
                 }
             }
 

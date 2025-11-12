@@ -9,12 +9,22 @@
     <string name="icon_wifi">Biểu tượng Wifi</string>
     <string name="btn_connect">Nút ấn kết nối với Kính thông minh</string>
 
+    <!-- Home Fragment -->
+    <string name="app_title">EdgeSight SmartGlass</string>
+    <string name="device_name">My SmartGlass</string>
+    <string name="camera_not_connected">Chưa nhận tín hiệu từ Camera</string>
+    <string name="camera_connected">Đã nhận tín hiệu camera</string>
+    <string name="connect_button">Kết nối</string>
+    <string name="glass_icon_desc">Biểu tượng kính thông minh</string>
+
+
+
     <!-- Lệnh -->
     <string name="connect">Kết nối</string>
     <string name="connected">Đã kết nối</string>
     <string name="connecting">Đang kết nối...</string>
     <string name="disconnected">Chưa kết nối</string>
-    <string name="connect_failed">Kết nối thất bại với ESP32</string>
+    <string name="connect_failed">Kết nối thất bại với Camera</string>
     <string name="disconnecting">Đang ngắt kết nối...</string>
     <string name="disconnect_failed">Ngắt kết nối thất bại</string>
     <string name="voice_prompt">Hãy nói lệnh...</string>
