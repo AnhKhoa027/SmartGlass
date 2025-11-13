@@ -43,7 +43,7 @@ class GestureActionManager(
         isPressed = true
         handler.postDelayed({
             if (isPressed) {
-                Log.d("GestureActionManager", "⏱ Giữ màn hình >4s")
+                Log.d("GestureActionManager", " Giữ màn hình >4s")
                 onHoldScreen?.invoke()
             }
         }, 4000)
@@ -58,7 +58,7 @@ class GestureActionManager(
         }
         lastPressTime = currentTime
 
-        if (pressCount == 2) {
+        if (pressCount == 10) {
             pressCount = 0
             Log.d("GestureActionManager", "Kích hoạt tính năng khẩn cấp")
             Toast.makeText(context, "Kích hoạt khẩn cấp!", Toast.LENGTH_SHORT).show()

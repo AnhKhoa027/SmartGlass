@@ -37,7 +37,7 @@ class HomeFragment : Fragment() {
 
     private var pausedForWakeWord = false
 
-    // ✅ Lưu reference BroadcastReceiver để unregister
+    //  Lưu reference BroadcastReceiver để unregister
     private var usbReceiver: BroadcastReceiver? = null
 
     fun setVoiceResponder(vr: VoiceResponder) {
@@ -86,10 +86,10 @@ class HomeFragment : Fragment() {
 
         updateButtonState(R.string.connect, "#2F58C3", true)
 
-        // ✅ Kiểm tra kết nối USB ngay khi vào fragment
+        //  Kiểm tra kết nối USB ngay khi vào fragment
         checkUsbCameraConnection(requireContext())
 
-        // ✅ Lắng nghe cắm/rút USB camera
+        //  Lắng nghe cắm/rút USB camera
         registerUsbReceiver()
     }
 

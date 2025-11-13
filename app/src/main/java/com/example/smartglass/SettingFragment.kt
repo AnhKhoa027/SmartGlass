@@ -94,9 +94,9 @@ class SettingFragment : Fragment() {
 
             settingsManager.setKeepScreenOn(isChecked)
             val msg = if (isChecked)
-                "Thiết bị sẽ luôn sáng."
+                "Thiết bị sẽ luôn sáng màn hình."
             else
-                "Thiết bị có thể tự khóa màn hình."
+                "Thiết bị sẽ tắt màn hình."
             voiceResponder.speak(msg)
         }
     }
@@ -164,7 +164,7 @@ class SettingFragment : Fragment() {
     private fun showDevTeamDialog() {
         val members = listOf(
             DevMember("Lê Hòa Hiệp", "28219005065", "Leader - AI Machine Development", R.drawable.hiep),
-            DevMember("Nguyễn Văn Hướng", "28211152883", "Embedded software development", R.drawable.huong),
+            DevMember("Nguyễn Văn Hướng", "28211152883", "Embedded Software Development", R.drawable.huong),
             DevMember("Phạm Anh Khoa", "28211152934", "Frontend & Backend Android Development", R.drawable.khoa),
             DevMember("Trương Công Thành", "28219043538", "Backend Android Development - Collect Data", R.drawable.thanh),
             DevMember("Nguyễn Tấn Việt", "28211152290", "Backend Android Development - GPS Tracker", R.drawable.viet),

@@ -40,14 +40,14 @@ class VoiceCommandProcessor(
     fun handleCommand(command: String): Boolean {
         val cmdLower = command.lowercase()
 
-        // 1️⃣ Kiểm tra xem có phải lệnh nội bộ không
+        // 1️ Kiểm tra xem có phải lệnh nội bộ không
         val handledLocally = handleLocalCommand(cmdLower)
         if (handledLocally) {
             Log.d("VoiceCommandProcessor", " Lệnh '$cmdLower' đã được xử lý nội bộ, bỏ qua Gemini.")
             return true
         }
 
-        // 2️⃣ Nếu chưa xử lý, gửi cho Gemini phân tích
+        // 2️ Nếu chưa xử lý, gửi cho Gemini phân tích
         scope.launch {
             withContext(Dispatchers.IO) {
                 geminiChat.analyzeIntent(command) { actions, responseText ->
@@ -180,19 +180,19 @@ class VoiceCommandProcessor(
                 handled = true
             }
 
-            // --- 5️⃣ Màn hình ---
+            // --- 5 Màn hình ---
             if (cmd.contains("bật màn hình") || cmd.contains("sáng màn hình") || cmd.contains("màn hình luôn sáng")) {
                 settings.setKeepScreenOn(true)
-                voiceResponder("Màn hình sẽ luôn sáng.")
+                voiceResponder("Thiết bị sẽ luôn sáng màn hình.")
                 handled = true
             }
-            if (cmd.contains("tắt màn hình") || cmd.contains("khóa màn hình")) {
+            if (cmd.contains("tắt màn hình") || cmd.contains("không sáng màn hình") || cmd.contains("Dừng sáng màn hình") ) {
                 settings.setKeepScreenOn(false)
-                voiceResponder("Thiết bị có thể tự khóa màn hình.")
+                voiceResponder("Thiết bị sẽ tắt màn hình.")
                 handled = true
             }
 
-            // --- 6️⃣ Vị trí ---
+            // --- 6️ Vị trí ---
             if (cmd.contains("vị trí") || cmd.contains("ở đâu")) {
                 handleUserAskLocation()
                 handled = true

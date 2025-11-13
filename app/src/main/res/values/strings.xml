@@ -59,7 +59,7 @@
 
     <string name="label_other">Khác</string>
     <string name="label_info">Thông Tin</string>
-    <string name="checkbox_unlock_device">Không Khóa Thiết Bị</string>
+    <string name="checkbox_unlock_device">Giữ Sáng Màn Hình</string>
     <string name="label_team_info">Thông Tin Nhóm Phát Triển</string>
     <string name="label_app_version">Phiên Bản Ứng Dụng 1.0.0</string>
 
