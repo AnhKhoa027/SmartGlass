@@ -66,30 +66,50 @@ class MainActivity : AppCompatActivity() {
         voiceResponder = VoiceResponder(this)
         geminiChat = GeminiChat(geminiApiKey)
 
-        val homeFragment = HomeFragment()
-        homeFragment.setVoiceResponder(voiceResponder)
+        // Khởi tạo HomeFragment đầu tiên
+        val homeFragment = getOrCreateHomeFragment()
         supportFragmentManager.beginTransaction()
-            .replace(R.id.frame_layout, homeFragment)
+            .replace(R.id.frame_layout, homeFragment, "HOME_FRAGMENT")
             .commit()
 
         bottomNavigationView = findViewById(R.id.bottom_navigation_view)
         bottomNavigationView.setOnItemSelectedListener { item ->
-            val selectedFragment: Fragment = when (item.itemId) {
-                R.id.home -> HomeFragment().apply { setVoiceResponder(voiceResponder) }
-                R.id.setting -> SettingFragment()
-                else -> HomeFragment().apply { setVoiceResponder(voiceResponder) }
+
+            val selectedFragment: Fragment? = when (item.itemId) {
+                R.id.home -> getOrCreateHomeFragment()
+                R.id.setting -> getOrCreateFragment("SETTING_FRAGMENT") ?: SettingFragment()
+                else -> null
             }
-            supportFragmentManager.beginTransaction()
-                .replace(R.id.frame_layout, selectedFragment)
-                .commit()
+
+            selectedFragment?.let {
+                supportFragmentManager.beginTransaction()
+                    .replace(R.id.frame_layout, it, getFragmentTag(item.itemId))
+                    .commit()
+            }
+
             true
         }
 
         fabMic = findViewById(R.id.fabMic)
-
         checkAndRequestPermissions()
     }
 
+    private fun getOrCreateHomeFragment(): HomeFragment {
+        return (supportFragmentManager.findFragmentByTag("HOME_FRAGMENT") as? HomeFragment)
+            ?: HomeFragment().apply { setVoiceResponder(voiceResponder) }
+    }
+
+    private fun getOrCreateFragment(tag: String): Fragment? {
+        return supportFragmentManager.findFragmentByTag(tag)
+    }
+
+    private fun getFragmentTag(itemId: Int): String {
+        return when(itemId) {
+            R.id.home -> "HOME_FRAGMENT"
+            R.id.setting -> "SETTING_FRAGMENT"
+            else -> "HOME_FRAGMENT"
+        }
+    }
 
     private fun checkAndRequestPermissions() {
         val permissionsNeeded = mutableListOf<String>()
@@ -191,8 +211,8 @@ class MainActivity : AppCompatActivity() {
             context = this,
             activity = this,
             bottomNav = bottomNavigationView,
-            onConnect = { callback -> sendCommandToHomeFragment(connect = true, callback) },
-            onDisconnect = { callback -> sendCommandToHomeFragment(connect = false, callback) },
+            onConnect = { callback -> sendCommandToHomeFragment(connect = true) },
+            onDisconnect = { callback -> sendCommandToHomeFragment(connect = false) },
             voiceResponder = { voiceResponder.speak(it) },
             geminiChat = geminiChat
         )
@@ -240,16 +260,18 @@ class MainActivity : AppCompatActivity() {
 
             wakeWordManager = WakeWordManager(
                 context = this,
+
                 // Key Khoaaa
-//                accessKey = "LBKWPv6jiRpVsjkJp9wmYWhiv/H1dTxzzu6eQpOd++WZNm7kHMPUbw==",
+                //accessKey = "LBKWPv6jiRpVsjkJp9wmYWhiv/H1dTxzzu6eQpOd++WZNm7kHMPUbw==",
                 // Key Thanhhh
                 accessKey = "W8WX0LISM+lvDmBoZmZZFgzot+XezDl3EP4quWB4KCVNQ3klMjhOhw==",
                 keywordFile = keywordFile.absolutePath,
-                sensitivity = 0.6f
+                sensitivity = 0.8f
             ) {
                 runOnUiThread {
-                    voiceResponder.speak("Tôi đang nghe...")
-                    voiceRecognitionManager.startListening()
+                    voiceResponder.speak("Tôi đang nghe...") {
+                        voiceRecognitionManager.startListening()
+                    }
                 }
             }
 
@@ -268,19 +290,16 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun sendCommandToHomeFragment(connect: Boolean, callback: (Boolean) -> Unit) {
-        (supportFragmentManager.findFragmentById(R.id.frame_layout) as? HomeFragment)?.let {
-            if (connect) it.connectToUsbCam() else it.disconnectFromUsbCam()
-        }
+    private fun sendCommandToHomeFragment(connect: Boolean) {
+        val homeFragment = getOrCreateHomeFragment()
+        if (connect) homeFragment.connectToUsbCam() else homeFragment.disconnectFromUsbCam()
     }
 
     override fun onPause() {
         super.onPause()
         wakeWordManager?.let { manager ->
             mainScope.launch(Dispatchers.Default) {
-                try {
-                    manager.stopListening()
-                } catch (_: Exception) {}
+                try { manager.stopListening() } catch (_: Exception) {}
             }
         }
     }

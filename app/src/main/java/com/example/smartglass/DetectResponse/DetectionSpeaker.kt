@@ -9,29 +9,42 @@ class DetectionSpeaker(
     private val voiceResponder: VoiceResponder
 ) {
     private var lastSpeakTime = 0L
-    private val speakInterval = 2000L
+    private val speakInterval = 5000L
 
     fun speakDetections(trackedObjects: List<TrackedObject>, frameW: Int, frameH: Int) {
         val now = System.currentTimeMillis()
-        if (now - lastSpeakTime < speakInterval || trackedObjects.isEmpty()) return
+        if (now - lastSpeakTime < speakInterval) return  // Chỉ đọc 1 lần / 5 giây
 
-        val messages = trackedObjects.map {
-            val direction = it.direction ?: "không rõ"
-            val boxW = (it.smoothBox.x2 - it.smoothBox.x1) * frameW
-            val boxH = (it.smoothBox.y2 - it.smoothBox.y1) * frameH
-            val area = boxW * boxH
-            val distance = when {
-                area > frameW * frameH * 0.2 -> "rất gần"
-                area > frameW * frameH * 0.05 -> "gần"
-                else -> "xa"
-            }
-            val label = it.box.clsName ?: "vật không rõ"
-            "Ở $direction có $label $distance, đang ${it.status}"
-        }
+        if (trackedObjects.isEmpty()) return
 
-        voiceResponder.speak(messages.joinToString(". "))
-        lastSpeakTime = now
+        // Lấy vật gần nhất (dựa vào diện tích bounding box)
+        val nearestObject = trackedObjects.maxByOrNull { obj ->
+            val boxW = (obj.smoothBox.x2 - obj.smoothBox.x1) * frameW
+            val boxH = (obj.smoothBox.y2 - obj.smoothBox.y1) * frameH
+            boxW * boxH
+        } ?: return
+
+        // Chỉ đọc nếu vật rất gần hoặc ở trước mặt
+        val boxW = (nearestObject.smoothBox.x2 - nearestObject.smoothBox.x1) * frameW
+        val boxH = (nearestObject.smoothBox.y2 - nearestObject.smoothBox.y1) * frameH
+        val area = boxW * boxH
+        val areaRatio = area / (frameW * frameH).toFloat()
+
+        val isVeryClose = areaRatio > 0.20f
+        val isCenter = nearestObject.direction?.lowercase() == "center"
+
+        if (!(isVeryClose || isCenter)) return  // Không đọc nếu không đạt điều kiện
+
+        val direction = nearestObject.direction ?: "trước mặt"
+        val label = nearestObject.box.clsName ?: "vật không rõ"
+        val status = nearestObject.status ?: "không rõ trạng thái"
+
+        val message = "Ở $direction có $label rất gần, đang $status"
+        voiceResponder.speak(message)
+
+        lastSpeakTime = now  // Cập nhật thời gian lần đọc cuối
     }
+
 
     fun speak(message: String) {
         voiceResponder.speak(message)

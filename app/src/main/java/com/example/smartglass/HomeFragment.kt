@@ -1,6 +1,7 @@
 package com.example.smartglass
 
 import android.content.*
+import android.hardware.usb.UsbConstants
 import android.hardware.usb.UsbManager
 import android.os.Bundle
 import android.view.*
@@ -33,11 +34,11 @@ class HomeFragment : Fragment() {
     private var voiceResponder: VoiceResponder? = null
 
     private var isConnected = false
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private var isUsbCameraConnected = false
 
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var pausedForWakeWord = false
 
-    //  Lưu reference BroadcastReceiver để unregister
     private var usbReceiver: BroadcastReceiver? = null
 
     fun setVoiceResponder(vr: VoiceResponder) {
@@ -85,11 +86,7 @@ class HomeFragment : Fragment() {
         }
 
         updateButtonState(R.string.connect, "#2F58C3", true)
-
-        //  Kiểm tra kết nối USB ngay khi vào fragment
         checkUsbCameraConnection(requireContext())
-
-        //  Lắng nghe cắm/rút USB camera
         registerUsbReceiver()
     }
 
@@ -102,23 +99,17 @@ class HomeFragment : Fragment() {
     }
 
     private fun updateCameraStatus(isConnected: Boolean) {
-        requireActivity().runOnUiThread {
-            if (isConnected) {
-                statusDot.setBackgroundResource(R.drawable.status_dot_green)
-                statusText.text = "Đã nhận tín hiệu camera"
-            } else {
-                statusDot.setBackgroundResource(R.drawable.status_dot_gray)
-                statusText.text = "Chưa nhận tín hiệu từ Camera"
-            }
-        }
+        if (!isAdded || isRemoving) return
+        statusDot.setBackgroundResource(if (isConnected) R.drawable.status_dot_green else R.drawable.status_dot_gray)
+        statusText.text = if (isConnected) "Đã nhận tín hiệu camera" else "Chưa nhận tín hiệu từ Camera"
     }
 
     private fun checkUsbCameraConnection(context: Context) {
         val manager = context.getSystemService(Context.USB_SERVICE) as UsbManager
-        val hasUsbCamera = manager.deviceList.values.any { device ->
-            device.deviceClass == android.hardware.usb.UsbConstants.USB_CLASS_VIDEO
+        isUsbCameraConnected = manager.deviceList.values.any { device ->
+            device.deviceClass == UsbConstants.USB_CLASS_VIDEO
         }
-        updateCameraStatus(hasUsbCamera)
+        updateCameraStatus(isUsbCameraConnected)
     }
 
     private fun registerUsbReceiver() {
@@ -130,8 +121,14 @@ class HomeFragment : Fragment() {
         usbReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
                 when (intent?.action) {
-                    UsbManager.ACTION_USB_DEVICE_ATTACHED -> updateCameraStatus(true)
-                    UsbManager.ACTION_USB_DEVICE_DETACHED -> updateCameraStatus(false)
+                    UsbManager.ACTION_USB_DEVICE_ATTACHED -> {
+                        isUsbCameraConnected = true
+                        updateCameraStatus(true)
+                    }
+                    UsbManager.ACTION_USB_DEVICE_DETACHED -> {
+                        isUsbCameraConnected = false
+                        updateCameraStatus(false)
+                    }
                 }
             }
         }
@@ -166,29 +163,31 @@ class HomeFragment : Fragment() {
             usbCameraViewManager.setOnCameraStateListener(object :
                 UsbCameraViewManager.CameraStateListener {
                 override fun onCameraConnected() {
+                    if (!isAdded) return
                     requireActivity().runOnUiThread {
                         isConnected = true
                         updateButtonState(R.string.connected, "#4CAF50", true)
-                        updateCameraStatus(true)
                         voiceResponder?.speak("Kết nối thành công")
                     }
                 }
 
                 override fun onCameraDisconnected() {
-                    requireActivity().runOnUiThread {
-                        isConnected = false
-                        updateButtonState(R.string.connect, "#2F58C3", true)
-                        updateCameraStatus(false)
-                        voiceResponder?.speak("Camera đã ngắt kết nối")
-                    }
-                }
-
-                override fun onCameraError(error: String) {
+                    if (!isAdded) return
                     requireActivity().runOnUiThread {
                         isConnected = false
                         updateButtonState(R.string.connect, "#2F58C3", true)
                         usbCameraViewManager.showGlassIcon()
-                        updateCameraStatus(false)
+                        voiceResponder?.speak("Camera đã ngắt kết nối")
+                        Toast.makeText(context, "Camera ngắt kết nối", Toast.LENGTH_SHORT).show()
+                    }
+                }
+
+                override fun onCameraError(error: String) {
+                    if (!isAdded) return
+                    requireActivity().runOnUiThread {
+                        isConnected = false
+                        updateButtonState(R.string.connect, "#2F58C3", true)
+                        usbCameraViewManager.showGlassIcon()
                         voiceResponder?.speak("Lỗi camera: $error")
                         Toast.makeText(context, "Lỗi camera: $error", Toast.LENGTH_SHORT).show()
                     }
@@ -199,10 +198,9 @@ class HomeFragment : Fragment() {
 
         } catch (e: Exception) {
             e.printStackTrace()
-            requireActivity().runOnUiThread {
+            if (isAdded) requireActivity().runOnUiThread {
                 isConnected = false
                 updateButtonState(R.string.connect, "#2F58C3", true)
-                updateCameraStatus(false)
                 voiceResponder?.speak("Kết nối thất bại")
             }
         }
@@ -214,7 +212,6 @@ class HomeFragment : Fragment() {
         detectionSpeaker?.stop()
         isConnected = false
         updateButtonState(R.string.connect, "#2F58C3", true)
-        updateCameraStatus(false)
         voiceResponder?.speak("Đã ngắt kết nối")
     }
 
@@ -225,8 +222,8 @@ class HomeFragment : Fragment() {
     }
 
     fun resumeDetectionAndSpeech() {
-        if (!pausedForWakeWord) return
         pausedForWakeWord = false
+        detectionSpeaker?.stop()
     }
 
     override fun onDestroyView() {

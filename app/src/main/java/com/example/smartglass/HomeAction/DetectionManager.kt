@@ -17,6 +17,8 @@ class DetectionManager(
     private val tracker = ObjectTracker(maxObjects = 5, iouThreshold = 0.5f)
     var lastFrame: Bitmap? = null
     private var isDetecting = false
+    var isPaused = false
+
 
     // YOLO Detector
     private val detector = Detector(
@@ -30,7 +32,7 @@ class DetectionManager(
                     val tracked = tracker.update(boundingBoxes)
                     val updatedBoxes = tracked.map { trackedObj ->
                         val box = trackedObj.smoothBox
-                        if (box.clsName == "Unknown" || box.cnf < 0.3f) {
+                        if (box.clsName == "Unknown" || box.cnf < 0.15f) {
                             val frameCopy = lastFrame?.takeIf { !it.isRecycled }?.copy(Bitmap.Config.ARGB_8888, false)
                             if (frameCopy != null) {
                                 try {
@@ -69,6 +71,7 @@ class DetectionManager(
     private val classifier = Classifier(context, "model_meta.tflite", "label_model.txt")
 
     fun detectFrame(bitmap: Bitmap) {
+        if(isPaused) return
         if (isDetecting) return
         isDetecting = true
         lastFrame = bitmap
