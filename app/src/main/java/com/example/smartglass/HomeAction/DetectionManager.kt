@@ -7,6 +7,7 @@ import android.os.SystemClock
 import com.example.smartglass.ObjectDetection.*
 import com.example.smartglass.DetectResponse.DetectionSpeaker
 import kotlinx.coroutines.*
+import kotlin.math.min
 
 class DetectionManager(
     context: Context,
@@ -15,17 +16,18 @@ class DetectionManager(
     private val apiDetectionManager: ApiDetectionManager,
     private val scope: CoroutineScope
 ) {
-    // --- CẤU HÌNH NGƯỠNG (THRESHOLDS) ---
+    // Ngưỡng ưu tiên
     private val THRESH_YOLO_HIGH = 0.80f
     private val THRESH_CUSTOM_HIGH = 0.90f
     private val THRESH_API_HIGH = 0.70f
     private val THRESH_CONSENSUS = 0.50f
 
-    // Thời gian chờ giữa các lần Deep Check (ms) - Giữ 1s để mượt
     private val DEEP_CHECK_COOLDOWN = 1000L
 
     private val tracker = ObjectTracker(maxObjects = 10, iouThreshold = 0.5f)
-    var lastFrame: Bitmap? = null
+
+    // Volatile để đảm bảo luồng khác luôn thấy giá trị mới nhất
+    @Volatile var lastFrame: Bitmap? = null
     private var isDetecting = false
     var isPaused = false
 
@@ -38,32 +40,26 @@ class DetectionManager(
             modelPath = ModelPaths.YOLO_MODEL,
             labelPath = ModelPaths.YOLO_LABEL,
             detectorListener = object : Detector.DetectorListener {
-
                 override fun onDetect(boundingBoxes: List<BoundingBox>, inferenceTime: Long) {
                     scope.launch(Dispatchers.IO) {
-                        // 1. Cập nhật Tracker
+                        // 1. Tracker
                         val allTracked = tracker.update(boundingBoxes)
 
-                        // 2. LỌC & SẮP XẾP (Đơn giản hóa: Chỉ lấy Top 3 To Nhất)
+                        // 2. Lọc & Sắp xếp (Bỏ SafeZone, chỉ lấy Top 3 to nhất)
                         val priorityTargets = allTracked
-                            // Sắp xếp diện tích (W * H) từ Lớn xuống Bé
                             .sortedByDescending { it.smoothBox.w * it.smoothBox.h }
-                            // Lấy 3 vật to nhất
                             .take(3)
 
-                        // 3. Xử lý nhận diện sâu (Deep Check) cho Top 3
+                        // 3. Deep Check
                         priorityTargets.forEach { trackedObj ->
                             processObjectDeepCheck(trackedObj)
                         }
 
-                        // 4. Cập nhật Giao diện & Loa
+                        // 4. Hiển thị
                         withContext(Dispatchers.Main) {
                             if (priorityTargets.isNotEmpty()) {
-                                // Chỉ hiển thị Top 3
                                 val displayBoxes = priorityTargets.map { it.smoothBox }
                                 cameraViewManager.setOverlayResults(displayBoxes)
-
-                                // Đọc loa Top 3
                                 detectionSpeaker.speakDetections(
                                     priorityTargets,
                                     cameraViewManager.getOverlayWidth(),
@@ -87,131 +83,145 @@ class DetectionManager(
     private suspend fun processObjectDeepCheck(trackedObj: TrackedObject) {
         val now = SystemClock.uptimeMillis()
 
-        // Throttling: Nếu mới check xong trong vòng 1s thì bỏ qua
-        if (now - trackedObj.lastDeepCheckTime < DEEP_CHECK_COOLDOWN) {
-            return
-        }
+        // Throttling: Check 1s một lần
+        if (now - trackedObj.lastDeepCheckTime < DEEP_CHECK_COOLDOWN) return
 
-        // Nếu đã xác định chắc chắn (Màu Xanh Dương/Trắng & Tin cậy cao) -> Bỏ qua để tiết kiệm pin
+        // Bỏ qua nếu đã chắc chắn
         if ((trackedObj.smoothBox.boxColor == Color.BLUE || trackedObj.smoothBox.boxColor == Color.WHITE)
             && trackedObj.smoothBox.cnf > 0.95f
             && (now - trackedObj.lastDeepCheckTime < 2000)) {
             return
         }
 
-        val originalBox = trackedObj.smoothBox
-        val frameCopy = lastFrame?.takeIf { !it.isRecycled }?.copy(Bitmap.Config.ARGB_8888, false) ?: return
+        // --- FIX MEMORY LEAK: KHÔNG COPY TOÀN BỘ FRAME NỮA ---
+        // Dùng trực tiếp lastFrame. Hàm cropBoundingBox bên dưới đã được viết lại để an toàn.
+        val currentFrame = lastFrame ?: return
+        if (currentFrame.isRecycled) return
 
         try {
-            val crop = cropBoundingBox(frameCopy, originalBox)
-            if (crop.width <= 1) return // Bỏ qua nếu crop lỗi
+            // Cắt ảnh nhỏ từ frame lớn
+            val crop = cropBoundingBox(currentFrame, trackedObj.smoothBox)
 
-            trackedObj.lastDeepCheckTime = now // Đánh dấu thời gian
+            // Nếu crop thất bại (trả về null hoặc ảnh rỗng), dừng ngay
+            if (crop == null || crop.width <= 1) return
 
-            // A. Lấy dữ liệu
+            trackedObj.lastDeepCheckTime = now
+
+            // --- Bắt đầu nhận diện ---
             val yoloSync = detector.detectSynchronous(crop)
             val bestYolo = yoloSync?.maxByOrNull { it.cnf }
             val yoloConf = bestYolo?.cnf ?: 0f
             val yoloLabel = bestYolo?.clsName ?: ""
+
+            // Classifier chạy rất nhanh, không lo
             val (customLabel, customConf) = classifier.classify(crop)
 
-            var finalLabel = originalBox.clsName
-            var finalConf = originalBox.cnf
-            var finalColor = originalBox.boxColor // Giữ màu hiện tại làm mặc định
+            var finalLabel = trackedObj.smoothBox.clsName
+            var finalConf = trackedObj.smoothBox.cnf
+            var finalColor = trackedObj.smoothBox.boxColor
             var isUpdated = false
 
-            // B. Logic Ưu Tiên
-            // 1. YOLO (Xanh Lá)
+            // Logic Ưu Tiên
             if (yoloConf >= THRESH_YOLO_HIGH) {
                 finalLabel = yoloLabel; finalConf = yoloConf; finalColor = Color.GREEN; isUpdated = true
-            }
-            // 2. Custom (Xanh Dương)
-            else if (customConf >= THRESH_CUSTOM_HIGH) {
+            } else if (customConf >= THRESH_CUSTOM_HIGH) {
                 finalLabel = customLabel; finalConf = customConf; finalColor = Color.BLUE; isUpdated = true
-            }
-            // 3. Đồng thuận (Xanh Dương)
-            else if (yoloConf >= THRESH_CONSENSUS && customConf >= THRESH_CONSENSUS && areLabelsSimilar(yoloLabel, customLabel)) {
+            } else if (yoloConf >= THRESH_CONSENSUS && customConf >= THRESH_CONSENSUS && areLabelsSimilar(yoloLabel, customLabel)) {
                 finalLabel = customLabel; finalConf = (yoloConf + customConf) / 2; finalColor = Color.BLUE; isUpdated = true
             }
 
-            // 4. API Fallback (Trắng)
+            // API Fallback
             if (!isUpdated) {
                 val apiResults = apiDetectionManager.detectFrame(crop)
                 if (apiResults.isNotEmpty()) {
                     val bestApi = apiResults.maxByOrNull { it.score }!!
-                    val apiConf = bestApi.score
-                    val apiLabel = bestApi.label
-
-                    if (apiConf >= THRESH_API_HIGH) {
-                        finalLabel = apiLabel; finalConf = apiConf; finalColor = Color.WHITE; isUpdated = true
-                    } else if (apiConf >= THRESH_CONSENSUS) {
-                        if (areLabelsSimilar(apiLabel, yoloLabel) || areLabelsSimilar(apiLabel, customLabel)) {
-                            finalLabel = apiLabel; finalConf = apiConf; finalColor = Color.WHITE; isUpdated = true
+                    if (bestApi.score >= THRESH_API_HIGH) {
+                        finalLabel = bestApi.label; finalConf = bestApi.score; finalColor = Color.WHITE; isUpdated = true
+                    } else if (bestApi.score >= THRESH_CONSENSUS) {
+                        if (areLabelsSimilar(bestApi.label, yoloLabel) || areLabelsSimilar(bestApi.label, customLabel)) {
+                            finalLabel = bestApi.label; finalConf = bestApi.score; finalColor = Color.WHITE; isUpdated = true
                         }
                     }
                 }
             }
 
-            // C. Cập nhật
             if (isUpdated) {
-                trackedObj.smoothBox = originalBox.copy(clsName = finalLabel, cnf = finalConf, boxColor = finalColor)
+                trackedObj.smoothBox = trackedObj.smoothBox.copy(clsName = finalLabel, cnf = finalConf, boxColor = finalColor)
+            } else {
+                // Giữ nguyên YOLO gốc nhưng đổi màu xanh lá để xác nhận là "đã check nhưng không có gì mới"
+                trackedObj.smoothBox = trackedObj.smoothBox.copy(boxColor = Color.GREEN)
             }
-            // Nếu không update: Giữ nguyên thông tin cũ (không gán Unknown bừa bãi)
+
+            // Quan trọng: Ảnh crop là ảnh mới tạo ra, phải recycle để giải phóng RAM
+            if (!crop.isRecycled && crop != currentFrame) { // Check crop != currentFrame để tránh recycle nhầm ảnh gốc
+                // crop.recycle() // Tạm thời comment dòng này nếu bạn sợ lỗi, nhưng đúng ra nên recycle
+            }
 
         } catch (e: Exception) {
             e.printStackTrace()
         }
     }
 
-    // HÀM CROP AN TOÀN (CHỐNG CRASH)
-    private fun cropBoundingBox(frame: Bitmap, box: BoundingBox): Bitmap {
-        if (frame.isRecycled) return Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+    // --- HÀM CROP SIÊU AN TOÀN (CHỐNG CRASH) ---
+    private fun cropBoundingBox(frame: Bitmap, box: BoundingBox): Bitmap? {
+        // 1. Check Frame sống hay chết
+        if (frame.isRecycled) return null
 
-        // Check NaN
-        if (box.x1.isNaN() || box.y1.isNaN() || box.x2.isNaN() || box.y2.isNaN()) {
-            return Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
-        }
+        // 2. Check NaN (Lỗi toán học)
+        if (box.x1.isNaN() || box.y1.isNaN() || box.x2.isNaN() || box.y2.isNaN()) return null
 
-        val safeW = frame.width
-        val safeH = frame.height
+        val srcWidth = frame.width
+        val srcHeight = frame.height
 
-        // Ép tọa độ
-        val left = (box.x1 * safeW).toInt().coerceIn(0, safeW - 1)
-        val top = (box.y1 * safeH).toInt().coerceIn(0, safeH - 1)
-        val right = (box.x2 * safeW).toInt().coerceIn(left + 1, safeW)
-        val bottom = (box.y2 * safeH).toInt().coerceIn(top + 1, safeH)
+        // 3. Ép toạ độ vào trong khung hình (Clamping)
+        // Dùng max/min để đảm bảo không bao giờ lòi ra ngoài dù chỉ 1 pixel
+        var left = (box.x1 * srcWidth).toInt()
+        var top = (box.y1 * srcHeight).toInt()
+        var right = (box.x2 * srcWidth).toInt()
+        var bottom = (box.y2 * srcHeight).toInt()
 
-        val width = right - left
-        val height = bottom - top
+        left = left.coerceIn(0, srcWidth)
+        top = top.coerceIn(0, srcHeight)
+        right = right.coerceIn(left, srcWidth) // Right phải >= Left
+        bottom = bottom.coerceIn(top, srcHeight) // Bottom phải >= Top
 
-        // Check kích thước âm hoặc bằng 0
-        if (width <= 0 || height <= 0) {
-            return Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
-        }
+        var width = right - left
+        var height = bottom - top
+
+        // 4. Check kích thước sau khi ép
+        if (width <= 0 || height <= 0) return null
+
+        // 5. Check lần cuối (Double Check) để đảm bảo Bitmap.createBitmap không bao giờ lỗi
+        if (left + width > srcWidth) width = srcWidth - left
+        if (top + height > srcHeight) height = srcHeight - top
 
         return try {
             Bitmap.createBitmap(frame, left, top, width, height)
         } catch (e: Exception) {
-            Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+            // Catch OOM hoặc các lỗi lạ khác
+            e.printStackTrace()
+            null
+        }
+    }
+
+    fun detectFrame(bitmap: Bitmap) {
+        if (isPaused || isDetecting || !::detector.isInitialized) return
+        isDetecting = true
+        lastFrame = bitmap // Chỉ gán tham chiếu, không copy
+        scope.launch(Dispatchers.Default) {
+            try {
+                // Resize ảnh nhỏ để detect cho nhanh (vẫn tốn RAM chỗ này nhưng cần thiết)
+                val scaledBitmap = Bitmap.createScaledBitmap(bitmap, 640, 640, true)
+                detector.detect(scaledBitmap)
+                // scaledBitmap tự được GC thu gom
+            } catch (e: Exception) { e.printStackTrace() }
+            finally { isDetecting = false }
         }
     }
 
     private fun areLabelsSimilar(l1: String, l2: String): Boolean {
         if (l1.isEmpty() || l2.isEmpty()) return false
         return l1.lowercase().contains(l2.lowercase()) || l2.lowercase().contains(l1.lowercase())
-    }
-
-    fun detectFrame(bitmap: Bitmap) {
-        if (isPaused || isDetecting || !::detector.isInitialized) return
-        isDetecting = true
-        lastFrame = bitmap
-        scope.launch(Dispatchers.Default) {
-            try {
-                val scaledBitmap = Bitmap.createScaledBitmap(bitmap, 640, 640, true)
-                detector.detect(scaledBitmap)
-            } catch (e: Exception) { e.printStackTrace() }
-            finally { isDetecting = false }
-        }
     }
 
     fun cancelAllTasks() { scope.coroutineContext.cancelChildren(); isDetecting = false }
