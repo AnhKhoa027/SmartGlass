@@ -1,109 +1,130 @@
 package com.example.smartglass.ObjectDetection
 
+import android.graphics.Color
 import android.os.SystemClock
-import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
 
 class ObjectTracker(
-    private val maxObjects: Int = 5,
-    private val iouThreshold: Float = 0.5f,
-    private val smoothFactor: Float = 0.15f,
-    private val maxInactiveTime: Long = 2000L // ms
+    private val maxObjects: Int = 10,
+    private val iouThreshold: Float = 0.45f, // Giảm nhẹ IoU để bắt dính tốt hơn
+    private val smoothFactor: Float = 0.4f,  // Tăng smooth để box di chuyển mượt hơn
+    private val maxInactiveTime: Long = 1500L // Thời gian "nhớ" vật thể khi bị che khuất (1.5 giây)
 ) {
     private val trackedObjects = mutableMapOf<Int, TrackedObject>()
     private var nextId = 0
 
     fun update(detections: List<BoundingBox>): List<TrackedObject> {
         val now = SystemClock.uptimeMillis()
-        val results = mutableListOf<TrackedObject>()
 
-        // Giữ top N object theo confidence
-        val sortedDetections = detections.sortedByDescending { it.cnf }.take(maxObjects)
+        // Danh sách các ID đã được cập nhật trong frame này
+        val updatedIds = mutableSetOf<Int>()
+
+        // 1. Sắp xếp detections (Ưu tiên độ tin cậy cao)
+        val sortedDetections = detections.sortedByDescending { it.cnf }
 
         for (det in sortedDetections) {
             var matchedId: Int? = null
             var bestIoU = 0f
 
-            // Tìm object cũ khớp IoU
+            // Tìm đối tượng cũ khớp nhất
             for ((id, tracked) in trackedObjects) {
-                val iou = calculateIoU(det, tracked.box)
+                // Chỉ match với những thằng chưa được update trong frame này
+                if (id in updatedIds) continue
+
+                val iou = calculateIoU(det, tracked.box) // So với box gốc lần trước
                 if (iou > iouThreshold && iou > bestIoU) {
                     bestIoU = iou
                     matchedId = id
                 }
             }
 
-            val id = matchedId ?: nextId++
+            if (matchedId != null) {
+                // --- TRƯỜNG HỢP: TÌM THẤY NGƯỜI QUEN ---
+                val id = matchedId
+                val oldObj = trackedObjects[id]!!
+                val oldBox = oldObj.smoothBox
 
-            val tracked = trackedObjects[id]
+                // LOGIC BẢO LƯU (QUAN TRỌNG NHẤT):
+                // Nếu box cũ đã có màu XỊN (Xanh Dương/Trắng) -> Giữ nguyên Tên và Màu
+                // Không để YOLO (thường là Xanh Lá hoặc Đỏ) ghi đè lên.
+                val isOldBoxVerified = oldBox.boxColor == Color.BLUE || oldBox.boxColor == Color.WHITE
 
-            // Smoothing bbox
-            val smoothBox = if (tracked != null) {
-                BoundingBox(
-                    x1 = tracked.smoothBox.x1 * (1 - smoothFactor) + det.x1 * smoothFactor,
-                    y1 = tracked.smoothBox.y1 * (1 - smoothFactor) + det.y1 * smoothFactor,
-                    x2 = tracked.smoothBox.x2 * (1 - smoothFactor) + det.x2 * smoothFactor,
-                    y2 = tracked.smoothBox.y2 * (1 - smoothFactor) + det.y2 * smoothFactor,
-                    cx = 0f, cy = 0f,
-                    w = 0f, h = 0f,
-                    cnf = det.cnf,
+                val finalLabel = if (isOldBoxVerified) oldBox.clsName else det.clsName
+                val finalConf = if (isOldBoxVerified) oldBox.cnf else det.cnf
+                val finalColor = if (isOldBoxVerified) oldBox.boxColor else det.boxColor
+
+                // Tính toán làm mượt tọa độ
+                var smX1 = oldBox.x1 * (1 - smoothFactor) + det.x1 * smoothFactor
+                var smY1 = oldBox.y1 * (1 - smoothFactor) + det.y1 * smoothFactor
+                var smX2 = oldBox.x2 * (1 - smoothFactor) + det.x2 * smoothFactor
+                var smY2 = oldBox.y2 * (1 - smoothFactor) + det.y2 * smoothFactor
+
+                // An toàn tọa độ
+                smX1 = smX1.coerceIn(0f, 1f)
+                smY1 = smY1.coerceIn(0f, 1f)
+                smX2 = max(smX1 + 0.01f, smX2.coerceIn(0f, 1f))
+                smY2 = max(smY1 + 0.01f, smY2.coerceIn(0f, 1f))
+
+                val smW = smX2 - smX1
+                val smH = smY2 - smY1
+
+                val newSmoothBox = BoundingBox(
+                    x1 = smX1, y1 = smY1, x2 = smX2, y2 = smY2,
+                    cx = smX1 + smW/2f, cy = smY1 + smH/2f, w = smW, h = smH,
+                    cnf = finalConf,
                     cls = det.cls,
-                    clsName = det.clsName
+                    clsName = finalLabel, // Dùng tên đã bảo lưu
+                    boxColor = finalColor // Dùng màu đã bảo lưu
                 )
-            } else det
 
-            // Tính delta center để xác định hướng
-            val (prevCx, prevCy) = if (tracked != null) {
-                val pb = tracked.smoothBox
-                (pb.x1 + pb.x2)/2f to (pb.y1 + pb.y2)/2f
+                // Cập nhật vào Map
+                oldObj.box = det // Cập nhật box thô mới nhất
+                oldObj.smoothBox = newSmoothBox
+                oldObj.lastSeen = now
+
+                updatedIds.add(id)
+
             } else {
-                val b = det
-                (b.x1 + b.x2)/2f to (b.y1 + b.y2)/2f
+                // --- TRƯỜNG HỢP: VẬT THỂ MỚI ---
+                val id = nextId++
+
+                // Vật mới thì phải chấp nhận thông tin từ YOLO
+                val w = det.x2 - det.x1
+                val h = det.y2 - det.y1
+                val fixedDet = det.copy(w=w, h=h, cx=det.x1 + w/2f, cy=det.y1 + h/2f)
+
+                val newObj = TrackedObject(
+                    box = fixedDet,
+                    lastSeen = now,
+                    smoothBox = fixedDet,
+                    status = "tracking"
+                )
+                trackedObjects[id] = newObj
+                updatedIds.add(id)
             }
-
-            val cx = (smoothBox.x1 + smoothBox.x2)/2f
-            val cy = (smoothBox.y1 + smoothBox.y2)/2f
-            val dx = cx - prevCx
-            val dy = cy - prevCy
-
-            // Xác định hướng và trạng thái
-            val status: String
-            val direction: String? = if (abs(dx) > 0.01f || abs(dy) > 0.01f) {
-                status = "di chuyển"
-                if (abs(dx) > abs(dy) * 1.5) if (dx > 0) "Phải" else "Trái"
-                else if (abs(dy) > abs(dx) * 1.5) if (dy > 0) "Trên" else "Dưới"
-                else tracked?.direction
-            } else {
-                status = "Đứng yên"
-                tracked?.direction
-            }
-
-            trackedObjects[id] = TrackedObject(
-                box = det,
-                lastSeen = now,
-                smoothBox = smoothBox,
-                direction = direction,
-                status = status
-            )
-
-            results.add(trackedObjects[id]!!)
         }
 
-        // Xóa object không xuất hiện > maxInactiveTime
-        val expired = trackedObjects.filter { now - it.value.lastSeen > maxInactiveTime }.keys
-        expired.forEach { trackedObjects.remove(it) }
+        // 2. Dọn dẹp rác (Xóa vật thể đã mất tích quá lâu)
+        val expiredIds = trackedObjects.filter { (now - it.value.lastSeen) > maxInactiveTime }.keys
+        expiredIds.forEach { trackedObjects.remove(it) }
 
-        return results
+        // 3. TRẢ VỀ KẾT QUẢ (Bao gồm cả những vật thể bị YOLO bỏ sót frame này nhưng chưa hết hạn)
+        // Đây là bước giúp chống "Tắt phụt"
+        return trackedObjects.values.toList()
     }
 
     private fun calculateIoU(box1: BoundingBox, box2: BoundingBox): Float {
-        val x1 = maxOf(box1.x1, box2.x1)
-        val y1 = maxOf(box1.y1, box2.y1)
-        val x2 = minOf(box1.x2, box2.x2)
-        val y2 = minOf(box1.y2, box2.y2)
+        val x1 = max(box1.x1, box2.x1); val y1 = max(box1.y1, box2.y1)
+        val x2 = min(box1.x2, box2.x2); val y2 = min(box1.y2, box2.y2)
 
-        val interArea = maxOf(0f, x2 - x1) * maxOf(0f, y2 - y1)
-        val box1Area = (box1.x2 - box1.x1) * (box1.y2 - box1.y1)
-        val box2Area = (box2.x2 - box2.x1) * (box2.y2 - box2.y1)
-        return interArea / (box1Area + box2Area - interArea)
+        if (x2 <= x1 || y2 <= y1) return 0.0f
+
+        val interArea = (x2 - x1) * (y2 - y1)
+        val b1Area = (box1.x2 - box1.x1) * (box1.y2 - box1.y1)
+        val b2Area = (box2.x2 - box2.x1) * (box2.y2 - box2.y1)
+
+        val union = b1Area + b2Area - interArea
+        return if (union > 0) interArea / union else 0.0f
     }
 }

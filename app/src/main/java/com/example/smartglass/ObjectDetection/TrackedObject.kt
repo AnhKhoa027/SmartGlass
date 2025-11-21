@@ -5,7 +5,8 @@ data class TrackedObject(
     var lastSeen: Long,
     var smoothBox: BoundingBox,
     var direction: String? = null,
-    var status: String = "standing"
+    var status: String = "standing",
+    var lastDeepCheckTime: Long = 0
 )
 
 object ModelPaths {

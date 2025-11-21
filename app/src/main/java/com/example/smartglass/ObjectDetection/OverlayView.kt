@@ -41,7 +41,7 @@ class OverlayView(context: Context?, attrs: AttributeSet?) : View(context, attrs
         textPaint.style = Paint.Style.FILL
         textPaint.textSize = 50f
 
-        boxPaint.color = ContextCompat.getColor(context!!, R.color.bounding_box_color)
+        // Cấu hình nét vẽ cơ bản, nhưng MÀU SẮC sẽ được set động trong onDraw
         boxPaint.strokeWidth = 8F
         boxPaint.style = Paint.Style.STROKE
     }
@@ -55,12 +55,21 @@ class OverlayView(context: Context?, attrs: AttributeSet?) : View(context, attrs
             val right = it.x2 * width
             val bottom = it.y2 * height
 
+            // --- THAY ĐỔI QUAN TRỌNG Ở ĐÂY ---
+            // Lấy màu từ thuộc tính boxColor của từng vật thể
+            boxPaint.color = it.boxColor
+            // --------------------------------
+
+            // Vẽ khung với màu tương ứng (Xanh lá/Xanh dương/Trắng)
             canvas.drawRect(left, top, right, bottom, boxPaint)
+
             val drawableText = it.clsName
 
             textBackgroundPaint.getTextBounds(drawableText, 0, drawableText.length, bounds)
             val textWidth = bounds.width()
             val textHeight = bounds.height()
+
+            // Vẽ nền chữ màu đen
             canvas.drawRect(
                 left,
                 top,
@@ -68,8 +77,9 @@ class OverlayView(context: Context?, attrs: AttributeSet?) : View(context, attrs
                 top + textHeight + BOUNDING_RECT_TEXT_PADDING,
                 textBackgroundPaint
             )
-            canvas.drawText(drawableText, left, top + bounds.height(), textPaint)
 
+            // Vẽ chữ màu trắng
+            canvas.drawText(drawableText, left, top + bounds.height(), textPaint)
         }
     }
 
