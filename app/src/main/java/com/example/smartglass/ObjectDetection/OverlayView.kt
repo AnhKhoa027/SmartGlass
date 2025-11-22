@@ -7,8 +7,7 @@ import android.graphics.Paint
 import android.graphics.Rect
 import android.util.AttributeSet
 import android.view.View
-import androidx.core.content.ContextCompat
-import com.example.smartglass.R
+
 
 class OverlayView(context: Context?, attrs: AttributeSet?) : View(context, attrs) {
 
@@ -63,7 +62,7 @@ class OverlayView(context: Context?, attrs: AttributeSet?) : View(context, attrs
             // Vẽ khung với màu tương ứng (Xanh lá/Xanh dương/Trắng)
             canvas.drawRect(left, top, right, bottom, boxPaint)
 
-            val drawableText = it.clsName
+            val drawableText = "${it.clsName} ${(it.cnf * 100).toInt()}%"
 
             textBackgroundPaint.getTextBounds(drawableText, 0, drawableText.length, bounds)
             val textWidth = bounds.width()

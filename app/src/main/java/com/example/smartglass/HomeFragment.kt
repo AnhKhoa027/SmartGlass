@@ -139,9 +139,9 @@ class HomeFragment : Fragment() {
     private fun ensureManagers() {
         if (voiceResponder == null) return
         if (detectionSpeaker == null)
-            detectionSpeaker = DetectionSpeaker(requireContext(), voiceResponder!!)
+            detectionSpeaker = DetectionSpeaker( voiceResponder!!)
         if (detectionManager == null) {
-            val apiManager = ApiDetectionManager(requireContext())
+            val apiManager = ApiDetectionManager()
             detectionManager = DetectionManager(
                 requireContext(),
                 usbCameraViewManager,

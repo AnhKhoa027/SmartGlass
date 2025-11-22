@@ -8,6 +8,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.widget.Toast
 import com.example.smartglass.EmergencyCall.EmergencyManager
+import com.example.smartglass.TTSandSTT.VoiceResponder
 
 class GestureActionManager(
     private val rootView: View,
@@ -15,9 +16,9 @@ class GestureActionManager(
     private val onHoldScreen: (() -> Unit)? = null
 ) {
     private val handler = Handler(Looper.getMainLooper())
+    private lateinit var voiceResponder: VoiceResponder
     private var isPressed = false
 
-    // Dùng cho nhấn 2 lần
     private var lastPressTime: Long = 0
     private var pressCount = 0
     private val DOUBLE_PRESS_THRESHOLD = 300L // ms
@@ -61,6 +62,7 @@ class GestureActionManager(
         if (pressCount == 10) {
             pressCount = 0
             Log.d("GestureActionManager", "Kích hoạt tính năng khẩn cấp")
+            voiceResponder.speak("Đã Kích hoạt tính năng khẩn cấp")
             Toast.makeText(context, "Kích hoạt khẩn cấp!", Toast.LENGTH_SHORT).show()
 
             val manager = EmergencyManager(context)
@@ -68,4 +70,3 @@ class GestureActionManager(
         }
     }
 }
-

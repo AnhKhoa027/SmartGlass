@@ -7,7 +7,6 @@ import android.os.SystemClock
 import com.example.smartglass.ObjectDetection.*
 import com.example.smartglass.DetectResponse.DetectionSpeaker
 import kotlinx.coroutines.*
-import kotlin.math.min
 
 class DetectionManager(
     context: Context,

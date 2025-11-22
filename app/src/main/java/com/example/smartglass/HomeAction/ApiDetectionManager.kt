@@ -1,10 +1,9 @@
 package com.example.smartglass.HomeAction
 
-import android.content.Context
 import android.graphics.Bitmap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
+import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.io.DataOutputStream
 import java.net.HttpURLConnection
@@ -12,85 +11,99 @@ import java.net.URL
 import java.util.UUID
 
 class ApiDetectionManager(
-    private val context: Context,
-    private val apiUrl: String = "http://192.168.1.8:8000/predict" // server local
+    private val apiUrl: String = "http://192.168.1.8:8000/predict"
 ) {
+
     data class BoundingBoxAPI(
         val label: String,
         val score: Float,
-        val x: Float, val y: Float,
-        val w: Float, val h: Float
+        val x1: Float,
+        val y1: Float,
+        val x2: Float,
+        val y2: Float,
+        val w: Float,
+        val h: Float
     )
 
-    /** Chuyển bitmap sang JPEG bytes */
+    /** Chuyển Bitmap -> JPEG byte array */
     private fun bitmapToJpegBytes(bitmap: Bitmap): ByteArray {
         val stream = ByteArrayOutputStream()
         bitmap.compress(Bitmap.CompressFormat.JPEG, 90, stream)
         return stream.toByteArray()
     }
 
-    /** Gọi API detect object (multipart/form-data) */
-    suspend fun detectFrame(bitmap: Bitmap): List<BoundingBoxAPI> = withContext(Dispatchers.IO) {
-        val result = mutableListOf<BoundingBoxAPI>()
-        try {
-            val jpegBytes = bitmapToJpegBytes(bitmap)
+    /** Gọi API detect object */
+    suspend fun detectFrame(bitmap: Bitmap): List<BoundingBoxAPI> =
+        withContext(Dispatchers.IO) {
 
-            val boundary = UUID.randomUUID().toString()
-            val lineEnd = "\r\n"
-            val twoHyphens = "--"
+            val result = mutableListOf<BoundingBoxAPI>()
 
-            val url = URL(apiUrl)
-            val conn = (url.openConnection() as HttpURLConnection).apply {
-                requestMethod = "POST"
-                setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
-                doOutput = true
-                doInput = true
-            }
+            try {
+                val jpegBytes = bitmapToJpegBytes(bitmap)
 
-            val outputStream = DataOutputStream(conn.outputStream)
+                val boundary = UUID.randomUUID().toString()
+                val line = "\r\n"
+                val two = "--"
 
-            // --- Gửi file ---
-            outputStream.writeBytes(twoHyphens + boundary + lineEnd)
-            outputStream.writeBytes(
-                "Content-Disposition: form-data; name=\"file\"; filename=\"frame.jpg\"$lineEnd"
-            )
-            outputStream.writeBytes("Content-Type: image/jpeg$lineEnd$lineEnd")
-            outputStream.write(jpegBytes)
-            outputStream.writeBytes(lineEnd)
+                val conn = (URL(apiUrl).openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+                    doInput = true
+                    doOutput = true
+                }
 
-            // --- Kết thúc multipart ---
-            outputStream.writeBytes(twoHyphens + boundary + twoHyphens + lineEnd)
-            outputStream.flush()
-            outputStream.close()
+                val output = DataOutputStream(conn.outputStream)
 
-            val responseText = conn.inputStream.bufferedReader().use { it.readText() }
-            conn.disconnect()
-
-            // Parse JSON theo format: score, label, location
-            val arr = JSONArray(responseText)
-            for (i in 0 until arr.length()) {
-                val obj = arr.getJSONObject(i)
-                val location = obj.getJSONArray("location")
-
-                val x = location.getDouble(0).toFloat()
-                val y = location.getDouble(1).toFloat()
-                val w = location.getDouble(2).toFloat()
-                val h = location.getDouble(3).toFloat()
-
-                result.add(
-                    BoundingBoxAPI(
-                        label = obj.getString("label"),
-                        score = obj.getDouble("score").toFloat(),
-                        x = x,
-                        y = y,
-                        w = w,
-                        h = h
-                    )
+                // ----- Gửi lên API -----
+                output.writeBytes("$two$boundary$line")
+                output.writeBytes(
+                    "Content-Disposition: form-data; name=\"file\"; filename=\"frame.jpg\"$line"
                 )
+                output.writeBytes("Content-Type: image/jpeg$line$line")
+                output.write(jpegBytes)
+                output.writeBytes(line)
+
+                // ----- Kết thúc request -----
+                output.writeBytes("$two$boundary$two$line")
+                output.flush()
+                output.close()
+
+                // ----- Đọc response -----
+                val responseText = conn.inputStream.bufferedReader().use { it.readText() }
+                conn.disconnect()
+
+                val json = JSONObject(responseText)
+                val arr = json.getJSONArray("predictions")
+
+                for (i in 0 until arr.length()) {
+                    val obj = arr.getJSONObject(i)
+                    val box = obj.getJSONArray("box")
+
+                    val x1 = box.getDouble(0).toFloat()
+                    val y1 = box.getDouble(1).toFloat()
+                    val x2 = box.getDouble(2).toFloat()
+                    val y2 = box.getDouble(3).toFloat()
+
+                    val w = x2 - x1
+                    val h = y2 - y1
+
+                    result.add(
+                        BoundingBoxAPI(
+                            label = obj.getString("label"),
+                            score = obj.getDouble("score").toFloat(),
+                            x1 = x1,
+                            y1 = y1,
+                            x2 = x2,
+                            y2 = y2,
+                            w = w,
+                            h = h
+                        )
+                    )
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
+
+            return@withContext result
         }
-        return@withContext result
-    }
 }

@@ -1,6 +1,5 @@
 package com.example.smartglass
-import com.example.smartglass.R
-import com.example.smartglass.MainActivity
+
 import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
@@ -15,6 +14,6 @@ class SplashActivity : AppCompatActivity() {
         Handler(Looper.getMainLooper()).postDelayed({
             startActivity(Intent(this, MainActivity::class.java))
             finish()
-        }, 3000) // 3000 milliseconds = 3 seconds
+        }, 2500) // 2500 milliseconds = 2.5 seconds
     }
 }

@@ -1,11 +1,9 @@
 package com.example.smartglass.DetectResponse
 
-import android.content.Context
 import com.example.smartglass.ObjectDetection.TrackedObject
 import com.example.smartglass.TTSandSTT.VoiceResponder
 
 class DetectionSpeaker(
-    private val context: Context,
     private val voiceResponder: VoiceResponder
 ) {
     private var lastSpeakTime = 0L
@@ -43,11 +41,6 @@ class DetectionSpeaker(
         voiceResponder.speak(message)
 
         lastSpeakTime = now  // Cập nhật thời gian lần đọc cuối
-    }
-
-
-    fun speak(message: String) {
-        voiceResponder.speak(message)
     }
 
     fun stop() {

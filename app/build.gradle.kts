@@ -41,7 +41,7 @@ android {
         viewBinding = true
     }
 
-    // ✅ Fix 16 KB alignment
+
     packaging {
         jniLibs {
             useLegacyPackaging = false
@@ -60,9 +60,11 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     implementation("com.android.volley:volley:1.2.1")
-
+    //Wake Word
     implementation("ai.picovoice:porcupine-android:3.0.3")
-
+    //USB Camera
+    implementation("com.herohan:UVCAndroid:1.0.10")
+    //Tensorflow YOLOv8
     implementation("org.tensorflow:tensorflow-lite:2.16.1")
     implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
     implementation("org.tensorflow:tensorflow-lite-gpu-delegate-plugin:0.4.4")
@@ -71,18 +73,14 @@ dependencies {
     implementation("org.tensorflow:tensorflow-lite-gpu:2.16.1")
     implementation("org.tensorflow:tensorflow-lite-select-tf-ops:2.16.1")
     implementation("org.tensorflow:tensorflow-lite-metadata:0.4.4")
-    implementation("com.herohan:UVCAndroid:1.0.10")
-    implementation("com.google.firebase:firebase-database:22.0.1")
-    implementation(platform("com.google.firebase:firebase-bom:32.2.2"))
-    // Firebase Realtime Database KTX
-    implementation("com.google.firebase:firebase-database-ktx")
+    // I Don't Know
     implementation("com.squareup.okhttp3:okhttp:4.11.0")
     implementation("org.java-websocket:Java-WebSocket:1.5.4")
     // CardView
     implementation("androidx.cardview:cardview:1.0.0")
-// Material Design (nếu dùng MaterialCardView)
+    // Material Design
     implementation("com.google.android.material:material:1.9.0")
-    // Thanh Add
+    // Gemini Support
     implementation("com.google.code.gson:gson:2.10.1")
     implementation("com.google.android.gms:play-services-location:21.3.0")
     implementation("org.json:json:20231013")
