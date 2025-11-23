@@ -17,7 +17,7 @@ class DetectionManager(
 ) {
     // Ngưỡng ưu tiên
     private val THRESH_YOLO_HIGH = 0.80f
-    private val THRESH_CUSTOM_HIGH = 0.90f
+    private val THRESH_CUSTOM_HIGH = 0.95f
     private val THRESH_API_HIGH = 0.70f
     private val THRESH_CONSENSUS = 0.50f
 
@@ -129,7 +129,7 @@ class DetectionManager(
                 finalLabel = customLabel; finalConf = (yoloConf + customConf) / 2; finalColor = Color.BLUE; isUpdated = true
             }
 
-            // API Fallback
+             //API Fallback
             if (!isUpdated) {
                 val apiResults = apiDetectionManager.detectFrame(crop)
                 if (apiResults.isNotEmpty()) {

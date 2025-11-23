@@ -156,7 +156,12 @@ class HomeFragment : Fragment() {
     fun connectToUsbCam() {
         updateButtonState(R.string.connecting, "#808080", false)
         voiceResponder?.speak("Đang kết nối với kính")
-
+        scope.launch(Dispatchers.Main) {
+            delay(5000)
+            if (!isConnected && isAdded) {
+                updateButtonState(R.string.connect, "#2F58C3", true)
+            }
+        }
         try {
             ensureManagers()
 
