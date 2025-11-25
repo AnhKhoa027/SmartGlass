@@ -98,7 +98,7 @@ class ObjectTracker(
                     box = fixedDet,
                     lastSeen = now,
                     smoothBox = fixedDet,
-                    status = "tracking"
+                    status = "Không xác định được vị trí"
                 )
                 trackedObjects[id] = newObj
                 updatedIds.add(id)

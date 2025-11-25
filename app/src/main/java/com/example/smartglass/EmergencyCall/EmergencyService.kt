@@ -12,7 +12,7 @@ class EmergencyService : Service() {
         Log.d("EmergencyService", "Đang thực hiện hành động khẩn cấp...")
 
         val emergencyManager = EmergencyManager(this)
-        emergencyManager.triggerEmergency(2)  // nhấn 2 lần -> gọi 2 số theo thứ tự
+        emergencyManager.triggerEmergency()  // nhấn 2 lần -> gọi 2 số theo thứ tự
 
         return START_NOT_STICKY
     }

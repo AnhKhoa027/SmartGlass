@@ -59,10 +59,10 @@ class GestureActionManager(
         }
         lastPressTime = currentTime
 
-        if (pressCount == 10) {
+        if (pressCount == 3) {
             pressCount = 0
             Log.d("GestureActionManager", "Kích hoạt tính năng khẩn cấp")
-            voiceResponder.speak("Đã Kích hoạt tính năng khẩn cấp")
+//            voiceResponder.speak("Đã Kích hoạt tính năng khẩn cấp")
             Toast.makeText(context, "Kích hoạt khẩn cấp!", Toast.LENGTH_SHORT).show()
 
             val manager = EmergencyManager(context)
