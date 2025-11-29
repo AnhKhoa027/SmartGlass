@@ -279,7 +279,7 @@ class EmergencyManager(private val context: Context) {
 
         emergencyContacts =
             if (saved.isNotEmpty()) {
-                saved.take(4)
+                saved.take(5)
             } else {
                 getFirstFiveContacts()
             }
@@ -297,7 +297,7 @@ class EmergencyManager(private val context: Context) {
         )
 
         cursor?.use {
-            while (it.moveToNext() && list.size < 4) {
+            while (it.moveToNext() && list.size < 5) {
                 val number = it.getString(
                     it.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.NUMBER)
                 )
@@ -376,7 +376,7 @@ class EmergencyManager(private val context: Context) {
             Hãy gọi lại ngay!
             """.trimIndent()
 
-            sendMessageToAllContacts(message)
+//            sendMessageToAllContacts(message)
 
             callAllContactsSequentially()
         }
