@@ -223,102 +223,30 @@
 //
 //
 
-// Call Tuan Tu
+
+//Call Tuan TU
 package com.example.smartglass.EmergencyCall
 
 import android.content.Context
 import android.database.Cursor
 import android.provider.ContactsContract
-import android.telephony.PhoneStateListener
-import android.telephony.TelephonyManager
 import android.telephony.SmsManager
+import android.telephony.TelephonyManager
 import android.util.Log
 import com.example.smartglass.gps.LocationHelper
 
 class EmergencyManager(private val context: Context) {
 
-    private val contactsManager = EmergencyContactsManager(context)
     private var emergencyContacts: List<String> = emptyList()
-    private var currentIndex = 0
-    private var callInProgress = false
-
+    private var callListener: PhoneCallListener? = null
     private var telephonyManager: TelephonyManager? = null
 
-    // Phone listener quyết định gọi số tiếp theo khi CALL_STATE_IDLE
-    private val phoneListener = object : PhoneStateListener() {
-        override fun onCallStateChanged(state: Int, phoneNumber: String?) {
-            super.onCallStateChanged(state, phoneNumber)
-
-            if (callInProgress && state == TelephonyManager.CALL_STATE_IDLE) {
-                Log.d("EmergencyManager", "Cuộc gọi kết thúc: $phoneNumber")
-                callInProgress = false
-                currentIndex++
-                if (currentIndex < emergencyContacts.size) {
-                    callNextNumber()
-                } else {
-                    Log.d("EmergencyManager", "Đã gọi hết danh bạ khẩn cấp")
-                    unregisterPhoneListener()
-                }
-            }
-        }
+    init {
+        telephonyManager = context.getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
     }
 
-    fun triggerEmergency() {
-        loadContacts()
-        if (emergencyContacts.isEmpty()) {
-            Log.d("EmergencyManager", "Không có danh bạ khẩn cấp")
-            return
-        }
 
-        // 1. Gửi SMS tất cả số trước
-        sendSmsToAllContacts()
-
-        // 2. Bắt PhoneCallListener
-        registerPhoneListener()
-
-        // 3. Gọi số đầu tiên
-        currentIndex = 0
-        callNextNumber()
-    }
-
-    fun endEmergency() {
-        Log.d("EmergencyManager", "Dừng khẩn cấp")
-        callInProgress = false
-        unregisterPhoneListener()
-    }
-
-    private fun loadContacts() {
-        val savedContacts = contactsManager.getContacts()
-        emergencyContacts = if (savedContacts.isNotEmpty()) {
-            Log.d("EmergencyManager", "Sử dụng danh bạ khẩn cấp: $savedContacts")
-            savedContacts
-        } else {
-            Log.d("EmergencyManager", "Không có danh bạ khẩn cấp → dùng danh bạ máy")
-            getPhoneContacts()
-        }
-    }
-
-    private fun getPhoneContacts(): List<String> {
-        val phones = mutableListOf<String>()
-        try {
-            val cursor: Cursor? = context.contentResolver.query(
-                ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
-                arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER),
-                null, null, null
-            )
-            cursor?.use {
-                while (it.moveToNext()) {
-                    val number = it.getString(
-                        it.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.NUMBER)
-                    )
-                    phones.add(number)
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("EmergencyManager", "Error fetching contacts: ${e.message}")
-        }
-        return phones
-    }
+    // Lấy tên chủ máy
     private fun getOwnerName(): String {
         return try {
             val cursor: Cursor? = context.contentResolver.query(
@@ -329,61 +257,137 @@ class EmergencyManager(private val context: Context) {
             cursor?.use {
                 if (it.moveToFirst()) {
                     it.getString(it.getColumnIndexOrThrow(ContactsContract.Profile.DISPLAY_NAME))
-                } else {
-                    "Chủ thiết bị"
-                }
+                } else "Chủ thiết bị"
             } ?: "Chủ thiết bị"
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             "Chủ thiết bị"
         }
     }
-    private fun sendSmsToAllContacts() {
-        val ownerName = getOwnerName ()
-        getLocationText { locationText ->
-            val message =
-                "KHẨN CẤP: Tôi tên là $ownerName Tôi là người Khiếm Thị. Hiện tại tôi đang gặp nguy hiểm. Hãy giúp tôi. Vị trí: $locationText"
-            for (phone in emergencyContacts) {
-                try {
-                    val smsManager = SmsManager.getDefault()
-                    val parts = smsManager.divideMessage(message)
-                    smsManager.sendMultipartTextMessage(phone, null, parts, null, null)
-                    Log.d("EmergencyManager", "SMS sent to $phone")
-                } catch (e: Exception) {
-                    Log.e("EmergencyManager", "SMS failed: ${e.message}")
-                }
-            }
-        }
-    }
 
+    // Lấy vị trí GPS
     private fun getLocationText(callback: (String) -> Unit) {
-        val locationHelper = LocationHelper(context)
-        locationHelper.getCurrentLocation { loc ->
+        LocationHelper(context).getCurrentLocation { loc ->
             if (loc != null) {
-                callback("https://maps.google.com/?q=${loc.latitude},${loc.longitude} (${loc.latitude},${loc.longitude})")
-            } else {
-                callback("Vị trí không xác định")
-            }
+                callback("https://maps.google.com/?q=${loc.latitude},${loc.longitude}")
+            } else callback("Không xác định")
         }
     }
 
-    private fun callNextNumber() {
-        if (currentIndex >= emergencyContacts.size) {
-            Log.d("EmergencyManager", "Đã gọi hết danh bạ khẩn cấp")
-            unregisterPhoneListener()
+    // Load danh bạ khẩn cấp → hoặc lấy 5 số đầu tiên trong máy
+    private fun loadContacts() {
+        val saved = EmergencyContactsManager(context).getContacts()
+
+        emergencyContacts =
+            if (saved.isNotEmpty()) {
+                saved.take(4)
+            } else {
+                getFirstFiveContacts()
+            }
+
+        Log.d("Emergency", "Danh sách khẩn cấp: $emergencyContacts")
+    }
+
+    private fun getFirstFiveContacts(): List<String> {
+        val list = mutableListOf<String>()
+        val cursor: Cursor? = context.contentResolver.query(
+            ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+            arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER),
+            null, null,
+            ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " ASC"
+        )
+
+        cursor?.use {
+            while (it.moveToNext() && list.size < 4) {
+                val number = it.getString(
+                    it.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                )
+
+                val cleaned = number.filter { c -> c.isDigit() || c == '+' }
+                if (cleaned.isNotBlank()) list.add(cleaned)
+            }
+        }
+        return list
+    }
+
+    // Gửi SMS
+    private fun sendMessageToAllContacts(message: String) {
+        for (phone in emergencyContacts) {
+            sendSms(phone, message)
+        }
+    }
+
+    private fun sendSms(phone: String, message: String) {
+        try {
+            val smsManager = SmsManager.getDefault()
+            val parts = smsManager.divideMessage(message)
+            smsManager.sendMultipartTextMessage(phone, null, parts, null, null)
+            Log.d("Emergency", "SMS sent to $phone")
+        } catch (e: Exception) {
+            Log.e("Emergency", "SMS send failed: ${e.message}")
+        }
+    }
+    // GỌI TUẦN TỰ
+    private fun callAllContactsSequentially() {
+        if (emergencyContacts.isEmpty()) {
+            Log.e("EmergencyCall", "Không có số để gọi")
             return
         }
-        val phone = emergencyContacts[currentIndex]
-        Log.d("EmergencyManager", "Gọi số $currentIndex: $phone")
-        callInProgress = true
-        PhoneHelper.callPhone(context, phone)
+
+        val iterator = emergencyContacts.iterator()
+
+        fun callNext() {
+            if (!iterator.hasNext()) {
+                Log.d("EmergencyCall", "Đã gọi xong toàn bộ danh sách")
+                stopCallListener()
+                return
+            }
+
+            val phone = iterator.next()
+            Log.d("EmergencyCall", "Gọi số: $phone")
+            callListener?.startTimeout()
+            PhoneHelper.callPhone(context, phone)
+        }
+
+        callListener = PhoneCallListener(context) {
+            Log.d("EmergencyCall", "Cuộc gọi kết thúc → gọi số tiếp theo")
+            callNext()
+        }
+
+        callListener?.register()
+
+        callNext()
     }
 
-    private fun registerPhoneListener() {
-        telephonyManager = context.getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
-        telephonyManager?.listen(phoneListener, PhoneStateListener.LISTEN_CALL_STATE)
+    private fun stopCallListener() {
+        callListener?.unregister()
+        callListener = null
     }
 
-    private fun unregisterPhoneListener() {
-        telephonyManager?.listen(phoneListener, PhoneStateListener.LISTEN_NONE)
+    // TRIGGER KHẨN CẤP (SMS + GỌI)
+    fun triggerEmergency() {
+        loadContacts()
+
+        val ownerName = getOwnerName()
+
+        getLocationText { location ->
+
+            val message = """  KHẨN CẤP! Tôi tên là $ownerName là người khiếm thị và tôi đang gặp nguy hiểm.
+            Vị trí hiện tại của tôi: $location
+            Hãy gọi lại ngay!
+            """.trimIndent()
+
+            sendMessageToAllContacts(message)
+
+            callAllContactsSequentially()
+        }
+    }
+
+    // STOP
+    fun endEmergency() {
+        stopCallListener()
+        Log.d("Emergency", "Đã dừng chế độ khẩn cấp")
     }
 }
+
+
+

@@ -8,11 +8,12 @@ import android.widget.Toast
 
 class EmergencyService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+
         Toast.makeText(this, "Xử lý tình huống khẩn cấp...", Toast.LENGTH_LONG).show()
-        Log.d("EmergencyService", "Đang thực hiện hành động khẩn cấp...")
+        Log.d("EmergencyService", "Đang xử lý khẩn cấp...")
 
         val emergencyManager = EmergencyManager(this)
-        emergencyManager.triggerEmergency()  // nhấn 2 lần -> gọi 2 số theo thứ tự
+        emergencyManager.triggerEmergency()
 
         return START_NOT_STICKY
     }

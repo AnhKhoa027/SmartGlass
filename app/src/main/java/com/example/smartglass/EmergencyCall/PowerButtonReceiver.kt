@@ -36,41 +36,31 @@
 //    }
 //}
 
-//Call Tuan tu
+// Call Tuan tu
 package com.example.smartglass.EmergencyCall
 
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
-import android.widget.Toast
 
 class PowerButtonReceiver : BroadcastReceiver() {
 
-    companion object {
-        private var lastPressTime: Long = 0
-        private var pressCount = 0
-        private const val THRESHOLD_MS = 400L  // 400ms giữa 2 lần nhấn
-    }
+    private var lastClick = 0L
+    private var count = 0
 
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action == Intent.ACTION_SCREEN_OFF || intent.action == Intent.ACTION_SCREEN_ON) {
-            val currentTime = System.currentTimeMillis()
-            if (currentTime - lastPressTime <= THRESHOLD_MS) pressCount++ else pressCount = 1
-            lastPressTime = currentTime
+        if (Intent.ACTION_SCREEN_OFF == intent.action || Intent.ACTION_SCREEN_ON == intent.action) {
+            val now = System.currentTimeMillis()
 
-            if (pressCount == 3) {
-                pressCount = 0
-                Toast.makeText(context, "Kích hoạt khẩn cấp!", Toast.LENGTH_LONG).show()
-                Log.d("PowerButtonReceiver", "Tính năng khẩn cấp được kích hoạt!")
+            if (now - lastClick < 800) count++
+            else count = 1
 
-                // Khởi chạy EmergencyService (nếu muốn chạy nền)
-                val serviceIntent = Intent(context, EmergencyService::class.java)
-                context.startService(serviceIntent)
+            lastClick = now
 
-                // Hoặc gọi trực tiếp EmergencyManager
-                val emergencyManager = EmergencyManager(context)
-                emergencyManager.triggerEmergency()
+            if (count >= 3) {
+                Log.d("PowerButtonReceiver", "Kích hoạt khẩn cấp")
+                EmergencyManager(context).triggerEmergency()
             }
         }
     }

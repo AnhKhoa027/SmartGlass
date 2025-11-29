@@ -20,7 +20,6 @@ class VoiceRecognitionManager(
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, "vi-VN")
             putExtra(RecognizerIntent.EXTRA_PROMPT, context.getString(R.string.voice_prompt))
         }
-
         try {
             launcher.launch(intent)
         } catch (e: ActivityNotFoundException) {
