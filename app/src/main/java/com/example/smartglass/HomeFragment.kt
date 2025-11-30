@@ -12,6 +12,7 @@ import com.android.volley.RequestQueue
 import com.android.volley.toolbox.Volley
 import com.example.smartglass.DetectResponse.DetectionSpeaker
 import com.example.smartglass.ObjectDetection.OverlayView
+import com.example.smartglass.SettingAction.TOFSensorReader
 import com.example.smartglass.TTSandSTT.VoiceResponder
 import com.example.smartglass.HomeAction.*
 import kotlinx.coroutines.*
@@ -35,11 +36,16 @@ class HomeFragment : Fragment() {
 
     private var isConnected = false
     private var isUsbCameraConnected = false
-
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var pausedForWakeWord = false
 
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
     private var usbReceiver: BroadcastReceiver? = null
+
+    // ----------------- TOF Sensor -----------------
+    private var tofSensorReader: TOFSensorReader? = null
+    private var currentDistanceMm: Int = 0
+    // ---------------------------------------------
 
     fun setVoiceResponder(vr: VoiceResponder) {
         voiceResponder = vr
@@ -88,7 +94,24 @@ class HomeFragment : Fragment() {
         updateButtonState(R.string.connect, "#2F58C3", true)
         checkUsbCameraConnection(requireContext())
         registerUsbReceiver()
+
+        initTOFSensor() // khởi tạo TOF sensor
     }
+
+    // ----------------- TOF Sensor init -----------------
+    private fun initTOFSensor() {
+        tofSensorReader = TOFSensorReader(requireContext()) { distance ->
+            currentDistanceMm = distance
+            // Khi có dữ liệu distance mới, dùng DetectionSpeaker
+            detectionSpeaker?.speakDetections(
+                trackedObjects = detectionManager?.currentTrackedObjects ?: emptyList(),
+                frameW = overlayView.width,
+                frameH = overlayView.height,
+                sensorDistanceMm = distance
+            )
+        }
+    }
+    // ----------------------------------------------------
 
     private fun updateButtonState(textRes: Int, bgColor: String, enabled: Boolean) {
         btnConnectXiaoCam.apply {
@@ -139,7 +162,7 @@ class HomeFragment : Fragment() {
     private fun ensureManagers() {
         if (voiceResponder == null) return
         if (detectionSpeaker == null)
-            detectionSpeaker = DetectionSpeaker( voiceResponder!!)
+            detectionSpeaker = DetectionSpeaker(voiceResponder!!)
         if (detectionManager == null) {
             val apiManager = ApiDetectionManager()
             detectionManager = DetectionManager(
@@ -231,6 +254,18 @@ class HomeFragment : Fragment() {
         detectionSpeaker?.stop()
     }
 
+    // ----------------- Lifecycle sensor -----------------
+    override fun onResume() {
+        super.onResume()
+        tofSensorReader?.start()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        tofSensorReader?.stop()
+    }
+    // -----------------------------------------------
+
     override fun onDestroyView() {
         super.onDestroyView()
         try { usbCameraViewManager.release() } catch (_: Exception) {}
@@ -238,6 +273,7 @@ class HomeFragment : Fragment() {
         scope.cancel()
         detectionManager?.release()
         detectionSpeaker?.stop()
+        tofSensorReader?.stop()
 
         usbReceiver?.let {
             requireContext().unregisterReceiver(it)

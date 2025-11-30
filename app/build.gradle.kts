@@ -64,6 +64,9 @@ dependencies {
     implementation("ai.picovoice:porcupine-android:3.0.3")
     //USB Camera
     implementation("com.herohan:UVCAndroid:1.0.10")
+
+    implementation("com.github.felHR85:UsbSerial:6.1.0")
+    implementation("com.github.mik3y:usb-serial-for-android:3.5.1")
     //Tensorflow YOLOv8
     implementation("org.tensorflow:tensorflow-lite:2.16.1")
     implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
