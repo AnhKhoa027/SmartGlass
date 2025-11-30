@@ -1,1 +1,45 @@
-<?xml version="1.0" encoding="utf-8"?> <androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools" android:layout_width="match_parent" android:layout_height="match_parent"> <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:orientation="vertical" android:gravity="center" android:layout_width="match_parent" android:layout_height="match_parent" android:padding="20dp"> <TextView android:id="@+id/tvLatitude" android:text="Latitude: " android:textSize="18sp" android:layout_width="wrap_content" android:layout_height="wrap_content"/> <TextView android:id="@+id/tvLongitude" android:text="Longitude: " android:textSize="18sp" android:layout_width="wrap_content" android:layout_height="wrap_content"/> </LinearLayout> </androidx.constraintlayout.widget.ConstraintLayout>
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <LinearLayout
+        android:id="@+id/mainLayout"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:padding="20dp"
+        android:layout_margin="20dp"
+        tools:ignore="MissingConstraints">
+
+        <TextView
+            android:id="@+id/tvLatitude"
+            android:text="Latitude:"
+            android:textSize="18sp"
+            android:layout_marginBottom="10dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+
+        <TextView
+            android:id="@+id/tvLongitude"
+            android:text="Longitude:"
+            android:textSize="18sp"
+            android:layout_marginBottom="20dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+
+        <!-- Nút bấm bắt đầu nghe giọng nói -->
+        <Button
+            android:id="@+id/btnStartListen"
+            android:text="Bắt đầu nhận giọng nói"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:padding="10dp"
+            android:textSize="16sp" />
+
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>
