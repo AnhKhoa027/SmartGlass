@@ -1,5 +1,4 @@
 package com.example.smartglass.TTSandSTT
-
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
@@ -12,6 +11,7 @@ import androidx.core.app.ActivityCompat
 import androidx.fragment.app.FragmentActivity
 import com.example.smartglass.R
 import com.example.smartglass.DetectResponse.GeminiChat
+import com.example.smartglass.Navigation.NavigationCallback
 import com.example.smartglass.SettingAction.SettingsManager
 import com.example.smartglass.gps.LocationHelper
 import com.google.android.material.bottomnavigation.BottomNavigationView
@@ -28,7 +28,9 @@ class VoiceCommandProcessor(
     private val onConnect: (callback: (Boolean) -> Unit) -> Unit,
     private val onDisconnect: (callback: (Boolean) -> Unit) -> Unit,
     private val voiceResponder: (String) -> Unit,
-    private val geminiChat: GeminiChat
+    private val voiceResponderOnDone: (String, () -> Unit) -> Unit,
+    private val geminiChat: GeminiChat,
+    private val NavigationCallback: NavigationCallback
 ) {
 
     private val settings = SettingsManager.getInstance(activity.applicationContext)
@@ -69,7 +71,27 @@ class VoiceCommandProcessor(
 
             return true
         }
+        //Xử lí đầu vào nếu nhận được các từ khóa chỉ đường
+        val navigateTriggerWords = listOf("đi đến", "đi tới", "chỉ đường đến", "tìm đường đến", "tới", "đến")
+        for (trigger in navigateTriggerWords) {
+            if (cmdLower.contains(trigger)) {
+                // Trích xuất điểm đến từ câu lệnh
+                val destination = cmdLower.substringAfter(trigger).trim()
 
+                if (destination.isNotBlank()) {
+                    val responseText = "Đã nhận lệnh: Đi đến $destination. Đang bắt đầu tìm đường."
+
+                    // Hành động chuyển hướng được đặt làm callback onDone
+                    voiceResponderOnDone(responseText) {
+                        // Hành động này chỉ được gọi khi TTS đã phát xong responseText
+                        NavigationCallback.startNavigationTo(destination)
+                    }
+                } else {
+                    voiceResponder("Xin lỗi, bạn muốn đi đến đâu?")
+                }
+                return true
+            }
+        }
 
         // Kiểm tra realtime ngày/giờ
         val realtimeKeywords = listOf("hôm nay", "ngày mấy", "ngày hôm nay", "mấy giờ", "thời gian", "giờ hiện tại")
@@ -142,13 +164,66 @@ class VoiceCommandProcessor(
 
         return handled
     }
+    // Hàm Helper mới để trích xuất điểm đến
+    /*
+    private fun extractDestination(target: String, value: String): String? {
+        // 1. Kết hợp target và value thành một chuỗi duy nhất,
+        //    vì đôi khi target chứa từ khóa (đi đến) và value chứa địa điểm (Hà Nội)
+        val combinedText = "$target $value".trim().toLowerCase(Locale("vi", "VN"))
+
+        // 2. Định nghĩa các cụm từ khóa dẫn đầu (trigger phrases)
+        val triggerPhrases = listOf(
+            "đi đến",
+            "chỉ đường tới",
+            "tìm đường đến",
+            "tới",
+            "đến"
+        )
+
+        // 3. Lặp qua các cụm từ khóa để tìm điểm bắt đầu của điểm đến thực sự
+        for (phrase in triggerPhrases) {
+            val index = combinedText.indexOf(phrase)
+            if (index != -1) {
+                // Lấy phần còn lại của chuỗi sau cụm từ khóa + khoảng trắng
+                val destination = combinedText.substring(index + phrase.length).trim()
+                if (destination.isNotBlank()) {
+                    return destination
+                }
+            }
+        }
+
+        // 4. Nếu không tìm thấy cụm từ khóa, chỉ lấy target/value đầu tiên
+        val fallback = if (target.isNotBlank()) target else if (value.isNotBlank()) value else null
+        return fallback?.trim()
+    }
+
+     */
 
     private suspend fun interpretIntentSilently(intent: String, target: String, value: String) {
         withContext(Dispatchers.Main) {
             when (intent) {
                 "navigate" -> {
-                    if (target.contains("cài đặt")) bottomNav.selectedItemId = R.id.setting
-                    if (target.contains("trang chủ")) bottomNav.selectedItemId = R.id.home
+                    if (target.contains("cài đặt")) {
+                        bottomNav.selectedItemId = R.id.setting
+                    } else if (target.contains("trang chủ")) {
+                        bottomNav.selectedItemId = R.id.home
+                    } else {
+                        // 2. Kích hoạt Điều hướng GPS/Mapbox
+                        /*
+                        val destination = extractDestination(target, value)
+
+                        if (destination != null && destination.isNotBlank()) {
+                            // 2. Kích hoạt Điều hướng GPS/Mapbox
+                            voiceResponder("Đã nhận lệnh: Đi đến $destination. Đang bắt đầu tìm đường.")
+                            // Gọi hàm startNavigationTo trong MainActivity thông qua callback
+                            NavigationCallback.startNavigationTo(destination)
+                        } else {
+                            voiceResponder("Xin lỗi, tôi không hiểu rõ điểm đến bạn muốn là gì.")
+                        }
+
+                         */
+
+                    }
                 }
                 "adjust" -> {
                     when {

@@ -65,8 +65,7 @@
                 <action android:name="android.intent.action.SCREEN_OFF" />
             </intent-filter>
         </receiver>
-
-
+        <!-- MainActivity hiển thị sau splash -->
         <!-- MainActivity hiển thị sau splash -->
         <activity
             android:name=".MainActivity"
@@ -78,3 +77,5 @@
 
 
 </manifest>
+
+

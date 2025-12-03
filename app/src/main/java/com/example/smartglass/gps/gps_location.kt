@@ -15,9 +15,6 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.speech.RecognizerIntent
-import android.speech.tts.TextToSpeech
-
-import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -41,8 +38,6 @@ import java.net.URLEncoder
 class location_gps : AppCompatActivity() {
     //Sử dụng fusedLocationClient để lấy chính xác vị trí,chính xác hơn so với LocationManager thuần
     private lateinit var fusedLocationClient: FusedLocationProviderClient
-    private lateinit var tvLatitude: TextView
-    private lateinit var tvLongitude: TextView
     private lateinit var btnStartListen: Button
     private var currentLocation: Location? = null
 
@@ -69,7 +64,7 @@ class location_gps : AppCompatActivity() {
     companion object {
         private const val PERMISSION_REQUEST_ACCESS_LOCATION = 100
         private const val NOTIFICATION_ID = 101
-        private const val CHANNEL_ID = "location_channel_id"
+        const val CHANNEL_ID = "location_channel_id"
         const val ACTION_FOREGROUND_ONLY_LOCATION_BROADCAST =
             "com.example.smartglass.action.FOREGROUND_ONLY_LOCATION_BROADCAST"
         const val EXTRA_LOCATION = "com.example.smartglass.extra.LOCATION"
@@ -96,11 +91,12 @@ class location_gps : AppCompatActivity() {
     // --- onCreate ---//
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.gps_location)
+        setContentView(R.layout.activity_main)
 
-        tvLatitude = findViewById(R.id.tvLatitude)
-        tvLongitude = findViewById(R.id.tvLongitude)
-        btnStartListen = findViewById(R.id.btnStartListen)
+        //tvLatitude = findViewById(R.id.tvLatitude)
+        //tvLongitude = findViewById(R.id.tvLongitude)
+        //btnStartListen = findViewById(R.id.btnStartListen)
+        btnStartListen=findViewById(R.id.fabMic)
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
 
@@ -158,8 +154,8 @@ class location_gps : AppCompatActivity() {
                 val longitude = latestLocation.longitude
 
                 // Cập nhật UI an toàn
-                tvLatitude.text = "Latitude: $latitude"
-                tvLongitude.text = "Longitude: $longitude"
+                //tvLatitude.text = "Latitude: $latitude"
+                //tvLongitude.text = "Longitude: $longitude"
                 Log.d("GPS_DEBUG", "Latitude: $latitude, Longitude: $longitude")
 
                 // Gửi Broadcast (một lần)
