@@ -10,7 +10,8 @@ interface MapboxInterface {
         @Path("coordinates") coordinates:String,
         @Query("steps") steps: Boolean=true,
         @Query("geometries") geometries: String="geojson",//định dạng dữ liệu hình học (geojson) hoặc (polyline)
-        @Query("access_token") token: String
+        @Query("access_token") token: String,
+        @Query("language")  language:String="vi"
     ): Call<MapboxResponse>
     @GET("geocoding/v5/mapbox.places/{place}.json")
     fun getGeocoding(

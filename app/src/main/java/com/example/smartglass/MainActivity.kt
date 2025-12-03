@@ -98,6 +98,7 @@ class MainActivity : AppCompatActivity(), NavigationCallback {
     private var currentStepIndex = 0// Chỉ số bước hiện tại không thể âm
     private var isNavigating = false // Cờ hiệu đang trong quá trình điều hướng
     private var waitingForInitialLocation = false
+    private var lastSpokenStepIndex = -1
 
 
     companion object {
@@ -219,7 +220,7 @@ class MainActivity : AppCompatActivity(), NavigationCallback {
                     }
                 }
 
-                Log.d("GPS_DEBUG", "Latitude: ${latestLocation.latitude}, Longitude: ${latestLocation.longitude}")
+                Log.d("GPS_DEBUG", "Longtitude: ${latestLocation.longitude}, Latitude: ${latestLocation.latitude}")
 
                 // Gửi Broadcast (một lần)
                 val intent =
@@ -262,17 +263,21 @@ class MainActivity : AppCompatActivity(), NavigationCallback {
                             currentStepIndex++
                             if (currentStepIndex < steps.size) {
                                 readCurrentStepInstruction() // Đọc bước mới
+                                lastSpokenStepIndex = currentStepIndex
+                                Log.i("NAV_DECISION", "ĐÃ ĐẠT NGƯỠNG RẼ (< 20m) -> Chuyển bước!")
                             } else {
                                 // Đã đến đích
                                 voiceResponder?.speak("Bạn đã đến đích, ${destination}. Kết thúc chỉ đường.")
                                 isNavigating = false
+                                stopLocationUpdates()
                             }
-                        } else if (distanceToManeuver < 100) {
-                            // Có thể thêm logic nhắc nhở nếu còn 100m nhưng chưa đọc
+                        } else if (distanceToManeuver < 100&& lastSpokenStepIndex < currentStepIndex) {
+                            Log.w("NAV_DECISION", "VÀO PHẠM VI NHẮC NHỞ (< 100m) VÀ CHƯA ĐỌC -> Đang nhắc nhở...")
                             val instruction = steps[currentStepIndex].maneuver.instruction
                             val distance = steps[currentStepIndex].distance
-                            // Chỉ đọc khi bước hiện tại chưa được đọc nhắc nhở (lastSpokenStepIndex < currentStepIndex)
+                            // Chỉ đọc khi bước hiện tại chưa được đọc nhắc nhở
                             voiceResponder?.speak("Trong ${formatDistance(distance)}, sắp đến ${instruction}")
+                            lastSpokenStepIndex = currentStepIndex
                         }
                     }
                 }
@@ -289,7 +294,7 @@ class MainActivity : AppCompatActivity(), NavigationCallback {
         // 3. Bắt đầu quá trình tìm tọa độ (changeLocationToGeoCoding())
 
         if (currentLocation == null) {
-            this.destination = destination
+                this.destination = destination
             voiceResponder.speak(text = "Vui lòng đợi, tôi đang xác định vị trí hiện tại của bạn."
             , onDone = {
                     // Đảm bảo GPS đang chạy để lấy vị trí
@@ -317,6 +322,7 @@ class MainActivity : AppCompatActivity(), NavigationCallback {
             destination = null
             routeSteps = null
             currentStepIndex = 0
+            lastSpokenStepIndex = -1
             voiceResponder.speak("Đã dừng chỉ đường.")
             stopLocationUpdates()
         } else {
@@ -324,6 +330,7 @@ class MainActivity : AppCompatActivity(), NavigationCallback {
         }
 
     }
+
     private fun startLocationUpdates(locationRequest: LocationRequest) {
         if (!isLocationEnabled()) {
             Toast.makeText(this, "Vui lòng bật GPS", Toast.LENGTH_SHORT).show()
@@ -471,7 +478,8 @@ class MainActivity : AppCompatActivity(), NavigationCallback {
         val token = "pk.eyJ1Ijoia2hvYXplcm8yNyIsImEiOiJjbWlqM2h1M3gwYWhhM2VzNHRxYTdybmpkIn0.nLGN6nehHZ-0k7Sbfnq74A"
         //val proximityString="${origin.longitude},${origin.latitude}"
 
-        RetrofitClient.api.getDirections(coordinates, steps = true, geometries = "geojson", token = token)
+
+        RetrofitClient.api.getDirections(coordinates, steps = true, geometries = "geojson", token = token,language="vi")
             .enqueue(object : Callback<MapboxResponse> {
                 override fun onResponse(call: Call<MapboxResponse>, response: Response<MapboxResponse>) {
                     Log.d("MAPBOX_RAW", response.body().toString())
@@ -490,7 +498,7 @@ class MainActivity : AppCompatActivity(), NavigationCallback {
                         routeSteps = MapBoxStepsParser.parseSteps(response.body())
                         isNavigating = true
                         currentStepIndex = 0
-
+                        lastSpokenStepIndex = 0
                         val distance = route?.distance ?: 0.0
                         val duration = route?.duration ?: 0.0
                         voiceResponder?.speak(text="Đã tìm thấy đường đi dài ${formatDistance(distance)}, mất ${formatDuration(duration)}. Bắt đầu chỉ đường.",
