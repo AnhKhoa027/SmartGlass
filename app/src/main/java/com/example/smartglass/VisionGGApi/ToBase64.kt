@@ -7,7 +7,7 @@ import java.io.ByteArrayOutputStream
 object ToBase64 {
     fun bitmapToBase64(bitmap: Bitmap): String {
         val stream = ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.JPEG, 100, stream)
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 70, stream)
         val bytes = stream.toByteArray()
         return Base64.encodeToString(bytes, Base64.NO_WRAP)
     }

@@ -1,109 +1,49 @@
 package com.example.smartglass.HomeAction
 
 import android.graphics.Bitmap
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import org.json.JSONObject
-import java.io.ByteArrayOutputStream
-import java.io.DataOutputStream
-import java.net.HttpURLConnection
-import java.net.URL
-import java.util.UUID
+import com.example.smartglass.VisionGGApi.ToBase64
+import com.example.smartglass.VisionGGApi.VisionRepository
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 
-class ApiDetectionManager(
-    private val apiUrl: String = "http://192.168.1.8:8000/predict"
-) {
+data class ApiObjectResult(
+    val label: String,
+    val score: Float
+)
 
-    data class BoundingBoxAPI(
-        val label: String,
-        val score: Float,
-        val x1: Float,
-        val y1: Float,
-        val x2: Float,
-        val y2: Float,
-        val w: Float,
-        val h: Float
-    )
+class ApiDetectionManager(private val apiKey: String) {
 
-    /** Chuyển Bitmap -> JPEG byte array */
-    private fun bitmapToJpegBytes(bitmap: Bitmap): ByteArray {
-        val stream = ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.JPEG, 90, stream)
-        return stream.toByteArray()
-    }
+    suspend fun detectFrame(bitmap: Bitmap): List<ApiObjectResult> =
+        suspendCancellableCoroutine { cont ->
 
-    /** Gọi API detect object */
-    suspend fun detectFrame(bitmap: Bitmap): List<BoundingBoxAPI> =
-        withContext(Dispatchers.IO) {
+            println("API >> Bitmap input size = ${bitmap.width}x${bitmap.height}")
 
-            val result = mutableListOf<BoundingBoxAPI>()
+            val base64 = ToBase64.bitmapToBase64(bitmap)
+            println("API >> Base64 length = ${base64.length}")
 
-            try {
-                val jpegBytes = bitmapToJpegBytes(bitmap)
-
-                val boundary = UUID.randomUUID().toString()
-                val line = "\r\n"
-                val two = "--"
-
-                val conn = (URL(apiUrl).openConnection() as HttpURLConnection).apply {
-                    requestMethod = "POST"
-                    setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
-                    doInput = true
-                    doOutput = true
+            VisionRepository.detectObjects(base64, apiKey) { response ->
+                if (response == null) {
+                    println("API >> RESPONSE NULL")
+                    cont.resume(emptyList())
+                    return@detectObjects
                 }
 
-                val output = DataOutputStream(conn.outputStream)
+                val annotations =
+                    response.responses
+                        ?.firstOrNull()
+                        ?.localizedObjectAnnotations
+                        ?: emptyList()
 
-                // ----- Gửi lên API -----
-                output.writeBytes("$two$boundary$line")
-                output.writeBytes(
-                    "Content-Disposition: form-data; name=\"file\"; filename=\"frame.jpg\"$line"
-                )
-                output.writeBytes("Content-Type: image/jpeg$line$line")
-                output.write(jpegBytes)
-                output.writeBytes(line)
+                println("API >> Returned ${annotations.size} objects")
 
-                // ----- Kết thúc request -----
-                output.writeBytes("$two$boundary$two$line")
-                output.flush()
-                output.close()
-
-                // ----- Đọc response -----
-                val responseText = conn.inputStream.bufferedReader().use { it.readText() }
-                conn.disconnect()
-
-                val json = JSONObject(responseText)
-                val arr = json.getJSONArray("predictions")
-
-                for (i in 0 until arr.length()) {
-                    val obj = arr.getJSONObject(i)
-                    val box = obj.getJSONArray("box")
-
-                    val x1 = box.getDouble(0).toFloat()
-                    val y1 = box.getDouble(1).toFloat()
-                    val x2 = box.getDouble(2).toFloat()
-                    val y2 = box.getDouble(3).toFloat()
-
-                    val w = x2 - x1
-                    val h = y2 - y1
-
-                    result.add(
-                        BoundingBoxAPI(
-                            label = obj.getString("label"),
-                            score = obj.getDouble("score").toFloat(),
-                            x1 = x1,
-                            y1 = y1,
-                            x2 = x2,
-                            y2 = y2,
-                            w = w,
-                            h = h
-                        )
+                val result = annotations.map {
+                    ApiObjectResult(
+                        label = it.name,
+                        score = it.score
                     )
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
 
-            return@withContext result
+                cont.resume(result)
+            }
         }
 }

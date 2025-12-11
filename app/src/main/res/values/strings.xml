@@ -63,7 +63,8 @@
     <string name="label_team_info">Thông Tin Nhóm Phát Triển</string>
     <string name="label_app_version">Phiên Bản Ứng Dụng 1.0.0</string>
 
-
+    <!-- API Keys -->
+    <string name="vision_api_key">AIzaSyAO8KjJ3u8wU1CfudHjdPipmFqgjY87y5Q</string>
 
 
     <!-- TODO: Remove or change this placeholder text -->

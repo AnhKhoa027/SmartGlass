@@ -4,6 +4,7 @@ import android.content.*
 import android.hardware.usb.UsbConstants
 import android.hardware.usb.UsbManager
 import android.os.Bundle
+import android.util.Log
 import android.view.*
 import android.widget.*
 import androidx.core.graphics.toColorInt
@@ -12,7 +13,7 @@ import com.android.volley.RequestQueue
 import com.android.volley.toolbox.Volley
 import com.example.smartglass.DetectResponse.DetectionSpeaker
 import com.example.smartglass.ObjectDetection.OverlayView
-import com.example.smartglass.SettingAction.TOFSensorReader
+import com.example.smartglass.SettingAction.DistanceMotionReader
 import com.example.smartglass.TTSandSTT.VoiceResponder
 import com.example.smartglass.HomeAction.*
 import kotlinx.coroutines.*
@@ -42,10 +43,11 @@ class HomeFragment : Fragment() {
 
     private var usbReceiver: BroadcastReceiver? = null
 
-    // ----------------- TOF Sensor -----------------
-    private var tofSensorReader: TOFSensorReader? = null
-    private var currentDistanceMm: Int = 0
-    // ---------------------------------------------
+    // Motion sensor Arduino
+    private var distanceMotionReader: DistanceMotionReader? = null
+    private var lastSensorDistance: Int = 0
+    private var lastSensorDirX: String = ""
+    private var lastSensorDirY: String = ""
 
     fun setVoiceResponder(vr: VoiceResponder) {
         voiceResponder = vr
@@ -95,23 +97,33 @@ class HomeFragment : Fragment() {
         checkUsbCameraConnection(requireContext())
         registerUsbReceiver()
 
-        initTOFSensor() // khởi tạo TOF sensor
+        initDistanceMotionSensor() // khởi tạo motion sensor
     }
 
-    // ----------------- TOF Sensor init -----------------
-    private fun initTOFSensor() {
-        tofSensorReader = TOFSensorReader(requireContext()) { distance ->
-            currentDistanceMm = distance
-            // Khi có dữ liệu distance mới, dùng DetectionSpeaker
-            detectionSpeaker?.speakDetections(
-                trackedObjects = detectionManager?.currentTrackedObjects ?: emptyList(),
-                frameW = overlayView.width,
-                frameH = overlayView.height,
-                sensorDistanceMm = distance
-            )
+    // Khởi tạo DistanceMotionReader
+    private fun initDistanceMotionSensor() {
+        distanceMotionReader = DistanceMotionReader(requireContext()) { distance, dirX, dirY ->
+            if (!isConnected) return@DistanceMotionReader
+            lastSensorDistance = distance
+            lastSensorDirX = dirX
+            lastSensorDirY = dirY
+            trySpeakDetections()
         }
     }
-    // ----------------------------------------------------
+
+    private fun trySpeakDetections() {
+        val objects = detectionManager?.currentTrackedObjects ?: return
+        if (objects.isEmpty()) return
+
+        detectionSpeaker?.speakDetections(
+            trackedObjects = objects,
+            frameW = overlayView.width,
+            frameH = overlayView.height,
+            sensorDistanceMm = lastSensorDistance,
+            sensorDirX = lastSensorDirX,
+            sensorDirY = lastSensorDirY
+        )
+    }
 
     private fun updateButtonState(textRes: Int, bgColor: String, enabled: Boolean) {
         btnConnectXiaoCam.apply {
@@ -151,6 +163,7 @@ class HomeFragment : Fragment() {
                     UsbManager.ACTION_USB_DEVICE_DETACHED -> {
                         isUsbCameraConnected = false
                         updateCameraStatus(false)
+                        distanceMotionReader?.stop()
                     }
                 }
             }
@@ -164,7 +177,8 @@ class HomeFragment : Fragment() {
         if (detectionSpeaker == null)
             detectionSpeaker = DetectionSpeaker(voiceResponder!!)
         if (detectionManager == null) {
-            val apiManager = ApiDetectionManager()
+            val apiKey = getString(R.string.vision_api_key)
+            val apiManager = ApiDetectionManager(apiKey)
             detectionManager = DetectionManager(
                 requireContext(),
                 usbCameraViewManager,
@@ -196,6 +210,8 @@ class HomeFragment : Fragment() {
                         isConnected = true
                         updateButtonState(R.string.connected, "#4CAF50", true)
                         voiceResponder?.speak("Kết nối thành công")
+
+                        distanceMotionReader?.start()
                     }
                 }
 
@@ -206,7 +222,7 @@ class HomeFragment : Fragment() {
                         updateButtonState(R.string.connect, "#2F58C3", true)
                         usbCameraViewManager.showGlassIcon()
                         voiceResponder?.speak("Camera đã ngắt kết nối")
-                        Toast.makeText(context, "Camera ngắt kết nối", Toast.LENGTH_SHORT).show()
+                        distanceMotionReader?.stop()
                     }
                 }
 
@@ -217,7 +233,7 @@ class HomeFragment : Fragment() {
                         updateButtonState(R.string.connect, "#2F58C3", true)
                         usbCameraViewManager.showGlassIcon()
                         voiceResponder?.speak("Lỗi camera: $error")
-                        Toast.makeText(context, "Lỗi camera: $error", Toast.LENGTH_SHORT).show()
+                        distanceMotionReader?.stop()
                     }
                 }
             })
@@ -238,6 +254,7 @@ class HomeFragment : Fragment() {
         usbCameraViewManager.isUserRequestedConnect = false
         try { usbCameraViewManager.showGlassIcon(); usbCameraViewManager.release() } catch (_: Exception) {}
         detectionSpeaker?.stop()
+        distanceMotionReader?.stop()
         isConnected = false
         updateButtonState(R.string.connect, "#2F58C3", true)
         voiceResponder?.speak("Đã ngắt kết nối")
@@ -254,17 +271,14 @@ class HomeFragment : Fragment() {
         detectionSpeaker?.stop()
     }
 
-    // ----------------- Lifecycle sensor -----------------
     override fun onResume() {
         super.onResume()
-        tofSensorReader?.start()
     }
 
     override fun onPause() {
         super.onPause()
-        tofSensorReader?.stop()
+        distanceMotionReader?.stop()
     }
-    // -----------------------------------------------
 
     override fun onDestroyView() {
         super.onDestroyView()
@@ -273,7 +287,7 @@ class HomeFragment : Fragment() {
         scope.cancel()
         detectionManager?.release()
         detectionSpeaker?.stop()
-        tofSensorReader?.stop()
+        distanceMotionReader?.stop()
 
         usbReceiver?.let {
             requireContext().unregisterReceiver(it)

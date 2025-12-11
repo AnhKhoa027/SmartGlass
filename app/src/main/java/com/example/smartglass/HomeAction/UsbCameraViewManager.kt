@@ -52,7 +52,6 @@ class UsbCameraViewManager(
 
         usbMonitor = USBMonitor(context, object : USBMonitor.OnDeviceConnectListener {
             override fun onAttach(device: android.hardware.usb.UsbDevice) {
-                Toast.makeText(context, "USB Camera Phát hiện: ${device.deviceName}", Toast.LENGTH_SHORT).show()
             }
 
             override fun onDeviceOpen(
@@ -129,6 +128,7 @@ class UsbCameraViewManager(
             glassIcon.visibility = View.GONE
             cameraStateListener?.onCameraConnected()
 
+            // ---- FRAME CALLBACK (XOAY 180° TRƯỚC KHI DETECT) ----
             uvcCamera?.setFrameCallback(IFrameCallback { buffer: ByteBuffer? ->
                 if (buffer == null) return@IFrameCallback
 
@@ -141,10 +141,18 @@ class UsbCameraViewManager(
                     yuv.compressToJpeg(Rect(0, 0, previewWidth, previewHeight), 80, out)
                     val bitmap = BitmapFactory.decodeByteArray(out.toByteArray(), 0, out.size())
 
-                    bitmap?.let {
-                        detectionManager?.detectFrame(it) // <<< Thêm dòng này
+                    bitmap?.let { bmp ->
+
+                        // --- XOAY 180 ĐỘ ĐỂ SỬA NGƯỢC ĐẦU ---
+                        val matrix = Matrix().apply { postRotate(180f) }
+                        val rotated = Bitmap.createBitmap(
+                            bmp, 0, 0, bmp.width, bmp.height, matrix, true
+                        )
+
+                        detectionManager?.detectFrame(rotated)
                     }
-                } catch (e: Exception) { e.printStackTrace() }
+
+                } catch (_: Exception) {}
             }, UVCCamera.PIXEL_FORMAT_NV21)
 
         } catch (e: Exception) {
@@ -160,7 +168,6 @@ class UsbCameraViewManager(
             uvcCamera?.destroy()
         } catch (_: Exception) {}
         uvcCamera = null
-
         detectionManager?.cancelAllTasks()
     }
 
@@ -188,6 +195,9 @@ class UsbCameraViewManager(
 
     override fun onSurfaceTextureAvailable(surface: SurfaceTexture, width: Int, height: Int) {
         surfaceReady = true
+
+        textureView.rotation = 180f
+
         uvcCamera?.apply {
             try {
                 setPreviewTexture(surface)

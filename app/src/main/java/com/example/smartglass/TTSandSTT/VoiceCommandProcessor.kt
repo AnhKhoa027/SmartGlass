@@ -6,7 +6,6 @@ import android.content.pm.PackageManager
 import android.location.Address
 import android.location.Geocoder
 import android.os.Build
-import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.fragment.app.FragmentActivity
 import com.example.smartglass.R

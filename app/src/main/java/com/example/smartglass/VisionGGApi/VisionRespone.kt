@@ -1,9 +1,9 @@
 data class VisionResponse(
-    val responses: List<VisionDetectionResult>
+    val responses: List<VisionDetectionResult>? = null
 )
 
 data class VisionDetectionResult(
-    val localizedObjectAnnotations: List<DetectedObject>?
+    val localizedObjectAnnotations: List<DetectedObject>? = null
 )
 
 data class DetectedObject(

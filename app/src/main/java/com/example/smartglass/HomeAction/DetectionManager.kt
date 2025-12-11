@@ -15,22 +15,20 @@ class DetectionManager(
     private val apiDetectionManager: ApiDetectionManager,
     private val scope: CoroutineScope
 ) {
-    // Ngưỡng ưu tiên
-    private val THRESH_YOLO_HIGH = 0.80f
-    private val THRESH_CUSTOM_HIGH = 0.95f
-    private val THRESH_API_HIGH = 0.70f
+
+    private val THRESH_YOLO_HIGH = 0.85f
+    private val THRESH_CUSTOM_HIGH = 0.98f
+    private val THRESH_API_HIGH = 0.80f
     private val THRESH_CONSENSUS = 0.50f
 
-    private val DEEP_CHECK_COOLDOWN = 1000L // 1s kiểm tra lại
+    private val DEEP_CHECK_COOLDOWN = 1000L
 
     private val tracker = ObjectTracker(maxObjects = 10, iouThreshold = 0.5f)
 
-    // Volatile để các luồng khác luôn thấy frame mới nhất
     @Volatile var lastFrame: Bitmap? = null
     private var isDetecting = false
     var isPaused = false
 
-    // Danh sách tracked objects hiện tại
     var currentTrackedObjects: List<TrackedObject> = emptyList()
         private set
 
@@ -43,8 +41,11 @@ class DetectionManager(
             modelPath = ModelPaths.YOLO_MODEL,
             labelPath = ModelPaths.YOLO_LABEL,
             detectorListener = object : Detector.DetectorListener {
+
                 override fun onDetect(boundingBoxes: List<BoundingBox>, inferenceTime: Long) {
                     scope.launch(Dispatchers.IO) {
+                        println("YOLO >> Detected ${boundingBoxes.size} boxes")
+
                         val allTracked = tracker.update(boundingBoxes)
 
                         val priorityTargets = allTracked
@@ -74,6 +75,7 @@ class DetectionManager(
                 }
 
                 override fun onEmptyDetect() {
+                    println("YOLO >> No objects")
                     currentTrackedObjects = emptyList()
                     cameraViewManager.setOverlayResults(emptyList())
                 }
@@ -85,126 +87,199 @@ class DetectionManager(
     private suspend fun processObjectDeepCheck(trackedObj: TrackedObject) {
         val now = SystemClock.uptimeMillis()
 
-        // Throttling: 1s check 1 lần
         if (now - trackedObj.lastDeepCheckTime < DEEP_CHECK_COOLDOWN) return
 
-        // Bỏ qua nếu đã chắc chắn
-        if ((trackedObj.smoothBox.boxColor == Color.BLUE || trackedObj.smoothBox.boxColor == Color.WHITE)
-            && trackedObj.smoothBox.cnf > 0.95f
-            && (now - trackedObj.lastDeepCheckTime < 2000)
-        ) return
+        println("DEEP-CHECK >> Target YOLO: ${trackedObj.smoothBox.clsName}")
 
-        val currentFrame = lastFrame ?: return
-        if (currentFrame.isRecycled) return
+        val currentFrame = lastFrame
+        if (currentFrame == null || currentFrame.isRecycled) {
+            println("DEEP-CHECK >> lastFrame NULL or RECYCLED")
+            return
+        }
+
+        val crop = cropBoundingBox(currentFrame, trackedObj.smoothBox)
+        if (crop == null) {
+            println("DEEP-CHECK >> Crop NULL")
+            return
+        }
+
+        println("DEEP-CHECK >> Crop size = ${crop.width}x${crop.height}")
+
+        trackedObj.lastDeepCheckTime = now
 
         try {
-            val crop = cropBoundingBox(currentFrame, trackedObj.smoothBox)
-            if (crop == null || crop.width <= 1) return
-
-            trackedObj.lastDeepCheckTime = now
-
-            //YOLO detect
-            val yoloSync = detector.detectSynchronous(crop)
-            val bestYolo = yoloSync?.maxByOrNull { it.cnf }
-            val yoloConf = bestYolo?.cnf ?: 0f
-            val yoloLabel = bestYolo?.clsName ?: ""
-
-            // Classifier
-            val (customLabel, customConf) = classifier.classify(crop)
-
-            var finalLabel = trackedObj.smoothBox.clsName
-            var finalConf = trackedObj.smoothBox.cnf
-            var finalColor = trackedObj.smoothBox.boxColor
-            var isUpdated = false
-
-            // --- Logic ưu tiên ---
-            if (yoloConf >= THRESH_YOLO_HIGH) {
-                finalLabel = yoloLabel; finalConf = yoloConf; finalColor = Color.GREEN; isUpdated = true
-            } else if (customConf >= THRESH_CUSTOM_HIGH) {
-                finalLabel = customLabel; finalConf = customConf; finalColor = Color.BLUE; isUpdated = true
-            } else if (yoloConf >= THRESH_CONSENSUS && customConf >= THRESH_CONSENSUS
-                && areLabelsSimilar(yoloLabel, customLabel)
-            ) {
-                finalLabel = customLabel; finalConf = (yoloConf + customConf) / 2; finalColor = Color.BLUE; isUpdated = true
+            // ---------------- YOLO & CLASSIFIER ----------------
+            val yoloDeferred = scope.async(Dispatchers.Default) {
+                detector.detectSynchronous(crop)?.maxByOrNull { it.cnf }
             }
 
-            // --- API Fallback ---
-            if (!isUpdated) {
-                val apiResults = apiDetectionManager.detectFrame(crop)
-                if (apiResults.isNotEmpty()) {
-                    val bestApi = apiResults.maxByOrNull { it.score }!!
-                    if (bestApi.score >= THRESH_API_HIGH) {
-                        finalLabel = bestApi.label; finalConf = bestApi.score; finalColor = Color.WHITE; isUpdated = true
-                    } else if (bestApi.score >= THRESH_CONSENSUS) {
-                        if (areLabelsSimilar(bestApi.label, yoloLabel) || areLabelsSimilar(bestApi.label, customLabel)) {
-                            finalLabel = bestApi.label; finalConf = bestApi.score; finalColor = Color.WHITE; isUpdated = true
+            val classifierDeferred = scope.async(Dispatchers.Default) {
+                classifier.classify(crop)
+            }
+
+            // ---------------- API detection ----------------
+            scope.launch(Dispatchers.IO) {
+                try {
+                    println("API >> START")
+                    println("API >> Sending bitmap ${crop.width}x${crop.height}")
+
+                    val apiResults = apiDetectionManager.detectFrame(crop)
+
+                    println("API >> Returned ${apiResults.size} results")
+
+                    if (apiResults.isNotEmpty()) {
+                        val bestApi = apiResults.maxByOrNull { it.score }!!
+                        println("API >> Best: ${bestApi.label} | score=${bestApi.score}")
+
+                        val similar = areLabelsSimilar(bestApi.label, trackedObj.smoothBox.clsName)
+                        println("API >> Similar with YOLO? $similar")
+
+                        if (bestApi.score >= THRESH_API_HIGH ||
+                            (bestApi.score >= THRESH_CONSENSUS && similar)
+                        ) {
+
+                            println("API >> APPLY OVERRIDE -> ${bestApi.label}")
+
+                            trackedObj.smoothBox = trackedObj.smoothBox.copy(
+                                clsName = bestApi.label,
+                                cnf = bestApi.score,
+                                boxColor = Color.WHITE
+                            )
+
+                            withContext(Dispatchers.Main) {
+                                cameraViewManager.setOverlayResults(
+                                    listOf(trackedObj.smoothBox)
+                                )
+                                detectionSpeaker.speakDetections(
+                                    listOf(trackedObj),
+                                    cameraViewManager.getOverlayWidth(),
+                                    cameraViewManager.getOverlayHeight()
+                                )
+                            }
+
+                        } else {
+                            println("API >> IGNORE (not strong enough)")
                         }
+                    } else {
+                        println("API >> EMPTY RESULT")
                     }
+
+                } catch (e: Exception) {
+                    println("API >> ERROR = ${e.message}")
                 }
             }
 
-            // Cập nhật trackedObj
-            trackedObj.smoothBox = if (isUpdated) {
-                trackedObj.smoothBox.copy(clsName = finalLabel, cnf = finalConf, boxColor = finalColor)
-            } else {
-                trackedObj.smoothBox.copy(boxColor = Color.GREEN)
+            // ---------------- WAIT YOLO & CLASSIFIER ----------------
+            val bestYolo = yoloDeferred.await()
+            val (customLabel, customConf) = classifierDeferred.await()
+
+            if (bestYolo != null)
+                println("DEEP-CHECK >> YOLO: ${bestYolo.clsName} | ${bestYolo.cnf}")
+
+            println("DEEP-CHECK >> CLASSIFIER: ${customLabel} | ${customConf}")
+
+            // ---------------- Apply YOLO/Classify logic ----------------
+            var updated = false
+            var finalBox = trackedObj.smoothBox
+
+            if (bestYolo?.cnf ?: 0f >= THRESH_YOLO_HIGH) {
+                println("CONSENSUS >> YOLO HIGH -> ${bestYolo!!.clsName}")
+                finalBox = finalBox.copy(
+                    clsName = bestYolo!!.clsName,
+                    cnf = bestYolo.cnf,
+                    boxColor = Color.GREEN
+                )
+                updated = true
             }
 
-            // Cleanup crop bitmap nếu cần
-            if (!crop.isRecycled && crop != currentFrame) {
-                // crop.recycle() // comment tạm thời, tránh crash
+            else if (customConf >= THRESH_CUSTOM_HIGH) {
+                println("CONSENSUS >> CLASSIFIER HIGH -> ${customLabel}")
+                finalBox = finalBox.copy(
+                    clsName = customLabel,
+                    cnf = customConf,
+                    boxColor = Color.BLUE
+                )
+                updated = true
+            }
+
+            else if (
+                bestYolo != null &&
+                bestYolo.cnf >= THRESH_CONSENSUS &&
+                customConf >= THRESH_CONSENSUS &&
+                areLabelsSimilar(bestYolo.clsName, customLabel)
+            ) {
+                println("CONSENSUS >> YOLO + CLASSIFIER AGREED")
+                finalBox = finalBox.copy(
+                    clsName = customLabel,
+                    cnf = (bestYolo.cnf + customConf) / 2f,
+                    boxColor = Color.BLUE
+                )
+                updated = true
+            }
+
+            if (updated) {
+                println("DEEP-CHECK >> UPDATED label = ${finalBox.clsName}")
+                trackedObj.smoothBox = finalBox
             }
 
         } catch (e: Exception) {
-            e.printStackTrace()
+            println("DEEP-CHECK >> ERROR = ${e.message}")
         }
     }
 
-    // --- Crop bitmap an toàn ---
+
     private fun cropBoundingBox(frame: Bitmap, box: BoundingBox): Bitmap? {
-        if (frame.isRecycled) return null
-        if (box.x1.isNaN() || box.y1.isNaN() || box.x2.isNaN() || box.y2.isNaN()) return null
+
+        println("CROP >> Raw box = (${box.x1},${box.y1}) -> (${box.x2},${box.y2})")
 
         val srcWidth = frame.width
         val srcHeight = frame.height
 
-        var left = (box.x1 * srcWidth).toInt().coerceIn(0, srcWidth)
-        var top = (box.y1 * srcHeight).toInt().coerceIn(0, srcHeight)
-        var right = (box.x2 * srcWidth).toInt().coerceIn(left, srcWidth)
-        var bottom = (box.y2 * srcHeight).toInt().coerceIn(top, srcHeight)
+        val left = (box.x1 * srcWidth).toInt().coerceIn(0, srcWidth)
+        val top = (box.y1 * srcHeight).toInt().coerceIn(0, srcHeight)
+        val right = (box.x2 * srcWidth).toInt().coerceIn(left, srcWidth)
+        val bottom = (box.y2 * srcHeight).toInt().coerceIn(top, srcHeight)
 
         val width = (right - left).coerceAtLeast(1)
         val height = (bottom - top).coerceAtLeast(1)
 
+        println("CROP >> Final = ${width}x${height}")
+
         return try {
             Bitmap.createBitmap(frame, left, top, width, height)
         } catch (e: Exception) {
-            e.printStackTrace()
+            println("CROP >> ERROR: ${e.message}")
             null
         }
     }
 
-    // --- Detect frame mới ---
+
     fun detectFrame(bitmap: Bitmap) {
         if (isPaused || isDetecting || !::detector.isInitialized) return
         isDetecting = true
-        lastFrame = bitmap // chỉ gán tham chiếu, không copy
+
+        lastFrame = bitmap
+        println("FRAME >> Received ${bitmap.width}x${bitmap.height}")
+
         scope.launch(Dispatchers.Default) {
             try {
                 val scaledBitmap = Bitmap.createScaledBitmap(bitmap, 640, 640, true)
                 detector.detect(scaledBitmap)
             } catch (e: Exception) {
-                e.printStackTrace()
+                println("FRAME >> ERROR = ${e.message}")
             } finally {
                 isDetecting = false
             }
         }
     }
 
+
     private fun areLabelsSimilar(l1: String, l2: String): Boolean {
         if (l1.isEmpty() || l2.isEmpty()) return false
-        return l1.lowercase().contains(l2.lowercase()) || l2.lowercase().contains(l1.lowercase())
+        return l1.lowercase().contains(l2.lowercase()) ||
+                l2.lowercase().contains(l1.lowercase())
     }
+
 
     fun cancelAllTasks() {
         scope.coroutineContext.cancelChildren()

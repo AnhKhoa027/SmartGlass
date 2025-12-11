@@ -24,8 +24,14 @@ class VoiceResponder(private val context: Context) : TextToSpeech.OnInitListener
 
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
-            tts.language = Locale.forLanguageTag("vi-VN")
 
+            Log.d("VoiceResponder", "=== TTS INIT OK ===")
+
+            // Kiểm tra engine hiện tại
+            val engine = tts.defaultEngine
+            Log.d("VoiceResponder", "Engine đang dùng: $engine")
+
+            // Set audio attributes
             tts.setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
@@ -33,15 +39,52 @@ class VoiceResponder(private val context: Context) : TextToSpeech.OnInitListener
                     .build()
             )
 
+            // Ngôn ngữ tiếng Việt
+            val locale = Locale.forLanguageTag("vi-VN")
+            val result = tts.setLanguage(locale)
+            Log.d("VoiceResponder", "Kết quả setLanguage = $result")
+
+            when (result) {
+                TextToSpeech.LANG_AVAILABLE ->
+                    Log.d("VoiceResponder", "Hỗ trợ tiếng Việt (LANG_AVAILABLE)")
+
+                TextToSpeech.LANG_COUNTRY_AVAILABLE ->
+                    Log.d("VoiceResponder", "Hỗ trợ tiếng Việt + country")
+
+                TextToSpeech.LANG_COUNTRY_VAR_AVAILABLE ->
+                    Log.d("VoiceResponder", "Hỗ trợ tiếng Việt đầy đủ")
+
+                TextToSpeech.LANG_MISSING_DATA ->
+                    Log.e("VoiceResponder", "Thiếu dữ liệu giọng Việt! Phải tải voice data.")
+
+                TextToSpeech.LANG_NOT_SUPPORTED ->
+                    Log.e("VoiceResponder", "Engine KHÔNG hỗ trợ tiếng Việt!")
+
+                else ->
+                    Log.e("VoiceResponder", "Lỗi setLanguage không xác định: $result")
+            }
+
+            // Log toàn bộ voices trong máy
+            try {
+                val voices = tts.voices
+                for (v in voices) {
+                    Log.d("VoiceResponder",
+                        "Voice: ${v.name} | locale=${v.locale} | quality=${v.quality} | latency=${v.latency}")
+                }
+            } catch (e: Exception) {
+                Log.e("VoiceResponder", "Không lấy được danh sách voices: ${e.message}")
+            }
+
             isReady = true
             Log.d("VoiceResponder", "TextToSpeech đã sẵn sàng")
 
-            // Nếu có văn bản chờ → đọc ngay
+            // Nếu có văn bản bị pending → đọc ngay
             pendingText?.let { speak(it, pendingCallback) }
             pendingText = null
             pendingCallback = null
+
         } else {
-            Log.e("VoiceResponder", "Khởi tạo TTS thất bại: $status")
+            Log.e("VoiceResponder", "TTS INIT ERROR: $status")
         }
     }
 
@@ -49,30 +92,44 @@ class VoiceResponder(private val context: Context) : TextToSpeech.OnInitListener
         if (!isReady) {
             pendingText = text
             pendingCallback = onDone
+            Log.w("VoiceResponder", "TTS chưa sẵn sàng → đã lưu pending")
             return
         }
 
         val utteranceId = "utt_${System.currentTimeMillis()}"
 
+        // Listener hoàn thành
         tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-            override fun onStart(utteranceId: String?) {}
-            override fun onError(utteranceId: String?) {}
-            override fun onDone(utteranceId: String?) {
+            override fun onStart(id: String?) {
+                Log.d("VoiceResponder", "Bắt đầu đọc: $text")
+            }
+
+            override fun onDone(id: String?) {
+                Log.d("VoiceResponder", "Hoàn thành đọc")
                 onDone?.let {
                     (context as? MainActivity)?.runOnUiThread { it() }
                 }
             }
+
+            override fun onError(id: String?) {
+                Log.e("VoiceResponder", "Lỗi khi đọc TTS")
+            }
         })
 
-        // Lấy volume & speed từ SettingsManager
+        // Lấy settings từ user
         val volumeFloat = settings.getVolumeFloat()
         val speed = settings.getSpeedMultiplier()
 
-        val params = Bundle().apply { putFloat("volume", volumeFloat) }
+        val params = Bundle().apply {
+            putFloat("volume", volumeFloat)
+        }
+
         tts.setSpeechRate(speed)
         tts.setPitch(1.0f)
 
-        Log.d("VoiceResponder", "🗣️ Nói: \"$text\" (speed=$speed, volume=$volumeFloat)")
+        Log.d("VoiceResponder",
+            "🗣️ Đọc: \"$text\" (speed=$speed, volume=$volumeFloat)")
+
         tts.speak(text, TextToSpeech.QUEUE_FLUSH, params, utteranceId)
     }
 

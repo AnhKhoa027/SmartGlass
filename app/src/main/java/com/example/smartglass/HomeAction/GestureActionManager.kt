@@ -59,7 +59,7 @@ class GestureActionManager(
         }
         lastPressTime = currentTime
 
-        if (pressCount == 3) {
+        if (pressCount == 15) {
             pressCount = 0
             Log.d("GestureActionManager", "Kích hoạt tính năng khẩn cấp")
 //            voiceResponder.speak("Đã Kích hoạt tính năng khẩn cấp")
