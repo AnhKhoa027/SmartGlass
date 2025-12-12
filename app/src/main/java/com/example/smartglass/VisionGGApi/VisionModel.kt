@@ -19,5 +19,5 @@ data class VisionFeature(
 )
 
 data class ImageContext(
-    val languageHints: List<String>? = null
+    val languageHints: List<String>? = listOf("vi")
 )

@@ -23,7 +23,9 @@ object VisionRepository {
                     features = listOf(
                         VisionFeature("OBJECT_LOCALIZATION", 10)
                     ),
-                    imageContext = ImageContext()
+                    imageContext = ImageContext(
+                        languageHints = listOf("vi")
+                    )
                 )
             )
         )

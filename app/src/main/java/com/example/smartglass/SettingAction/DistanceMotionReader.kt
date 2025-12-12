@@ -28,9 +28,9 @@ class DistanceMotionReader(
     private val executor = Executors.newSingleThreadExecutor()
     private var keepReading = false
 
-    /** ---------------------------
-     *  CUSTOM PROBER – hỗ trợ CH340, CP2102, FTDI, CDC-ACM
-     *  --------------------------- */
+    private var lastTimestamp = -1L
+
+    /** CUSTOM PROBER – hỗ trợ nhiều chip USB-Serial */
     private val customProber: UsbSerialProber by lazy {
         val table = UsbSerialProber.getDefaultProbeTable().apply {
             addProduct(0x1A86, 0x7523, CdcAcmSerialDriver::class.java)  // CH340
@@ -66,7 +66,6 @@ class DistanceMotionReader(
             ContextCompat.RECEIVER_NOT_EXPORTED
         )
 
-        // --- Dùng CUSTOM PROBER ---
         val drivers = customProber.findAllDrivers(usbManager)
 
         if (drivers.isEmpty()) {
@@ -150,19 +149,47 @@ class DistanceMotionReader(
         }
     }
 
+    /** ------------------------
+     *  PROCESS LINE WITH SAFETY
+     *  ------------------------ */
     private fun processLine(line: String) {
         val parts = line.split(",")
 
         if (parts.size != 6) {
-            Log.e(TAG, "Invalid data: $line")
+            Log.e(TAG, "Invalid data format: $line")
             return
         }
 
-        val distance = parts[1].toIntOrNull() ?: 0
+        val timestamp = parts[0].toLongOrNull() ?: return
+        val distance = parts[1].toIntOrNull() ?: return
+        val status = parts[2]
         val dirX = parts[3]
         val dirY = parts[4]
+        val checksumRecv = parts[5].toIntOrNull() ?: return
 
-        Log.d(TAG, "Parsed → distance=$distance dirX=$dirX dirY=$dirY")
+        // --- CHECK STATUS ---
+        if (status != "OK") {
+            Log.e(TAG, "Sensor error → skip line")
+            return
+        }
+
+        // --- CHECK TIMESTAMP (optional safe check) ---
+        if (lastTimestamp != -1L && timestamp <= lastTimestamp) {
+            Log.e(TAG, "Old or duplicate data → skip")
+            return
+        }
+        lastTimestamp = timestamp
+
+        // --- CHECK CHECKSUM ---
+        val checksumCalc =
+            distance + dirX.length + dirY.length + (timestamp % 1000).toInt()
+
+        if (checksumRecv != checksumCalc) {
+            Log.e(TAG, "Checksum mismatch ($checksumRecv != $checksumCalc) → corrupted line")
+            return
+        }
+
+        Log.d(TAG, "Valid → dist=$distance dirX=$dirX dirY=$dirY")
 
         onUpdate(distance, dirX, dirY)
     }

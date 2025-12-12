@@ -17,7 +17,7 @@ class DetectionManager(
 ) {
 
     private val THRESH_YOLO_HIGH = 0.85f
-    private val THRESH_CUSTOM_HIGH = 0.98f
+    private val THRESH_CUSTOM_HIGH = 0.80f
     private val THRESH_API_HIGH = 0.80f
     private val THRESH_CONSENSUS = 0.50f
 
@@ -117,56 +117,61 @@ class DetectionManager(
                 classifier.classify(crop)
             }
 
-            // ---------------- API detection ----------------
-            scope.launch(Dispatchers.IO) {
-                try {
-                    println("API >> START")
-                    println("API >> Sending bitmap ${crop.width}x${crop.height}")
+            // ---------------- API detection----------------
+            val USE_API = true // <-- true để bật, false để tắt
+            if (USE_API) {
+                scope.launch(Dispatchers.IO) {
+                    try {
+                        println("API >> START")
+                        println("API >> Sending bitmap ${crop.width}x${crop.height}")
 
-                    val apiResults = apiDetectionManager.detectFrame(crop)
+                        val apiResults = apiDetectionManager.detectFrame(crop)
 
-                    println("API >> Returned ${apiResults.size} results")
+                        println("API >> Returned ${apiResults.size} results")
 
-                    if (apiResults.isNotEmpty()) {
-                        val bestApi = apiResults.maxByOrNull { it.score }!!
-                        println("API >> Best: ${bestApi.label} | score=${bestApi.score}")
+                        if (apiResults.isNotEmpty()) {
+                            val bestApi = apiResults.maxByOrNull { it.score }!!
+                            println("API >> Best: ${bestApi.label} | score=${bestApi.score}")
 
-                        val similar = areLabelsSimilar(bestApi.label, trackedObj.smoothBox.clsName)
-                        println("API >> Similar with YOLO? $similar")
+                            val similar = areLabelsSimilar(bestApi.label, trackedObj.smoothBox.clsName)
+                            println("API >> Similar with YOLO? $similar")
 
-                        if (bestApi.score >= THRESH_API_HIGH ||
-                            (bestApi.score >= THRESH_CONSENSUS && similar)
-                        ) {
+                            if (bestApi.score >= THRESH_API_HIGH ||
+                                (bestApi.score >= THRESH_CONSENSUS && similar)
+                            ) {
 
-                            println("API >> APPLY OVERRIDE -> ${bestApi.label}")
+                                println("API >> APPLY OVERRIDE -> ${bestApi.label}")
 
-                            trackedObj.smoothBox = trackedObj.smoothBox.copy(
-                                clsName = bestApi.label,
-                                cnf = bestApi.score,
-                                boxColor = Color.WHITE
-                            )
-
-                            withContext(Dispatchers.Main) {
-                                cameraViewManager.setOverlayResults(
-                                    listOf(trackedObj.smoothBox)
+                                trackedObj.smoothBox = trackedObj.smoothBox.copy(
+                                    clsName = bestApi.label,
+                                    cnf = bestApi.score,
+                                    boxColor = Color.RED
                                 )
-                                detectionSpeaker.speakDetections(
-                                    listOf(trackedObj),
-                                    cameraViewManager.getOverlayWidth(),
-                                    cameraViewManager.getOverlayHeight()
-                                )
+
+                                withContext(Dispatchers.Main) {
+                                    cameraViewManager.setOverlayResults(
+                                        listOf(trackedObj.smoothBox)
+                                    )
+                                    detectionSpeaker.speakDetections(
+                                        listOf(trackedObj),
+                                        cameraViewManager.getOverlayWidth(),
+                                        cameraViewManager.getOverlayHeight()
+                                    )
+                                }
+
+                            } else {
+                                println("API >> IGNORE (not strong enough)")
                             }
-
                         } else {
-                            println("API >> IGNORE (not strong enough)")
+                            println("API >> EMPTY RESULT")
                         }
-                    } else {
-                        println("API >> EMPTY RESULT")
-                    }
 
-                } catch (e: Exception) {
-                    println("API >> ERROR = ${e.message}")
+                    } catch (e: Exception) {
+                        println("API >> ERROR = ${e.message}")
+                    }
                 }
+            } else {
+                println("API >> SKIPPED (USE_API=false)")
             }
 
             // ---------------- WAIT YOLO & CLASSIFIER ----------------
@@ -226,6 +231,7 @@ class DetectionManager(
             println("DEEP-CHECK >> ERROR = ${e.message}")
         }
     }
+
 
 
     private fun cropBoundingBox(frame: Bitmap, box: BoundingBox): Bitmap? {

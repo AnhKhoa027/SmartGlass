@@ -61,7 +61,7 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
     implementation("com.android.volley:volley:1.2.1")
     //Wake Word
-    implementation("ai.picovoice:porcupine-android:3.0.3")
+    implementation("ai.picovoice:porcupine-android:4.0.0")
     //USB Camera
     implementation("com.herohan:UVCAndroid:1.0.10")
 

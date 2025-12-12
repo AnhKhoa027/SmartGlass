@@ -51,8 +51,7 @@ class UsbCameraViewManager(
         if (usbMonitor != null) return
 
         usbMonitor = USBMonitor(context, object : USBMonitor.OnDeviceConnectListener {
-            override fun onAttach(device: android.hardware.usb.UsbDevice) {
-            }
+            override fun onAttach(device: android.hardware.usb.UsbDevice) {}
 
             override fun onDeviceOpen(
                 device: android.hardware.usb.UsbDevice,
@@ -102,7 +101,7 @@ class UsbCameraViewManager(
             return
         }
 
-        stopCamera()
+        safeStopCamera()
 
         try {
             val param = UVCParam()
@@ -128,7 +127,6 @@ class UsbCameraViewManager(
             glassIcon.visibility = View.GONE
             cameraStateListener?.onCameraConnected()
 
-            // ---- FRAME CALLBACK (XOAY 180° TRƯỚC KHI DETECT) ----
             uvcCamera?.setFrameCallback(IFrameCallback { buffer: ByteBuffer? ->
                 if (buffer == null) return@IFrameCallback
 
@@ -143,7 +141,6 @@ class UsbCameraViewManager(
 
                     bitmap?.let { bmp ->
 
-                        // --- XOAY 180 ĐỘ ĐỂ SỬA NGƯỢC ĐẦU ---
                         val matrix = Matrix().apply { postRotate(180f) }
                         val rotated = Bitmap.createBitmap(
                             bmp, 0, 0, bmp.width, bmp.height, matrix, true
@@ -162,24 +159,38 @@ class UsbCameraViewManager(
         }
     }
 
-    fun stopCamera() {
+    // ---------------- SAFE STOP CAMERA (NO CRASH WHEN DETACH) ----------------
+    private fun safeStopCamera() {
         try {
-            uvcCamera?.stopPreview()
-            uvcCamera?.destroy()
+            uvcCamera?.let { cam ->
+
+                try { cam.stopPreview() } catch (_: Exception) {}
+                try { cam.setFrameCallback(null, 0) } catch (_: Exception) {}
+
+                try { Thread.sleep(250) } catch (_: Exception) {}   // tránh crash libusb
+
+                try { cam.close() } catch (_: Exception) {}
+                try { cam.destroy() } catch (_: Exception) {}
+            }
         } catch (_: Exception) {}
+
         uvcCamera = null
         detectionManager?.cancelAllTasks()
     }
 
+    fun stopCamera() = safeStopCamera()
+
     fun showGlassIcon() {
-        textureView.visibility = View.GONE
-        glassIcon.visibility = View.VISIBLE
-        overlayView.clear()
-        stopCamera()
+        mainHandler.post {
+            textureView.visibility = View.GONE
+            glassIcon.visibility = View.VISIBLE
+            overlayView.clear()
+            safeStopCamera()
+        }
     }
 
     fun release() {
-        stopCamera()
+        safeStopCamera()
         usbMonitor?.unregister()
         usbMonitor = null
         detectionManager?.cancelAllTasks()
@@ -212,7 +223,7 @@ class UsbCameraViewManager(
     override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) {}
     override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean {
         surfaceReady = false
-        stopCamera()
+        safeStopCamera()
         return true
     }
     override fun onSurfaceTextureUpdated(surface: SurfaceTexture) {}

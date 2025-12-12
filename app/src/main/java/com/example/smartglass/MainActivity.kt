@@ -40,9 +40,6 @@ import android.widget.Button
 import androidx.core.app.NotificationCompat
 import com.example.smartglass.TTSandSTT.VoiceResponder
 import com.example.smartglass.TTSandSTT.VoiceRecognitionManager
-import com.example.smartglass.gps.GeocodingResponse
-import com.example.smartglass.gps.MapBoxStepsParser
-import com.example.smartglass.gps.RetrofitClient
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
@@ -50,12 +47,7 @@ import com.example.smartglass.gps.GoongRetrofitClient
 import com.example.smartglass.gps.GoongGeocodingResponse
 import com.example.smartglass.gps.GoongDirectionResponse
 import com.example.smartglass.gps.GoongStepsParser
-import com.example.smartglass.gps.GoongInterface
 import com.example.smartglass.gps.GoongStep
-import kotlin.compareTo
-import kotlin.inc
-import kotlin.text.compareTo
-import kotlin.text.get
 
 class MainActivity : AppCompatActivity(), NavigationCallback {
 
@@ -350,9 +342,9 @@ class MainActivity : AppCompatActivity(), NavigationCallback {
                         }
                     }
                 }
-                checkAndRequestPermissions()
             }
         }
+        checkAndRequestPermissions()
     }
 
     override fun startNavigationTo(destination: String) {
@@ -430,7 +422,6 @@ class MainActivity : AppCompatActivity(), NavigationCallback {
         /*
         Từ Android 10 trở lên, ACCESS_BACKGROUND_LOCATION phải được xin sau khi user đã cấp FINE/COARSE,
         nếu không hệ thống sẽ tự động bỏ qua.
-
          */
         val permissionsToRequest = mutableListOf<String>()
 
@@ -956,9 +947,9 @@ class MainActivity : AppCompatActivity(), NavigationCallback {
 
     private fun setupWakeWord() {
         try {
-            val keywordFile = File(filesDir, "Hey-Bro_en_android_v3_0_0.ppn")
+            val keywordFile = File(filesDir, "Hey-Nana_en_android_v4_0_0.ppn")
             if (!keywordFile.exists()) {
-                assets.open("Hey-Bro_en_android_v3_0_0.ppn").use { input ->
+                assets.open("Hey-Nana_en_android_v4_0_0.ppn").use { input ->
                     keywordFile.outputStream().use { output -> input.copyTo(output) }
                 }
                 Log.d("WakeWord", "Copied keyword file: ${keywordFile.absolutePath}")
@@ -966,9 +957,11 @@ class MainActivity : AppCompatActivity(), NavigationCallback {
 
             wakeWordManager = WakeWordManager(
                 context = this,
-                //accessKey = "W8WX0LISM+lvDmBoZmZZFgzot+XezDl3EP4quWB4KCVNQ3klMjhOhw==",
+                accessKey = "W8WX0LISM+lvDmBoZmZZFgzot+XezDl3EP4quWB4KCVNQ3klMjhOhw==",
                 //Cua Khoa
-                accessKey = "LBKWPv6jiRpVsjkJp9wmYWhiv/H1dTxzzu6eQpOd++WZNm7kHMPUbw==",
+                //accessKey = "LBKWPv6jiRpVsjkJp9wmYWhiv/H1dTxzzu6eQpOd++WZNm7kHMPUbw==",
+                //Cua Hiep Hey Nana
+                //accessKey = "0deYDn+Gu4ANgLreLQbh19vppkEoOIzjxy2o2PQpFQRpHYsJM5vn5Q==",
                 keywordFile = keywordFile.absolutePath,
                 sensitivity = 0.8f
             ) {

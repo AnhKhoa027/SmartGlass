@@ -141,4 +141,7 @@ class VoiceResponder(private val context: Context) : TextToSpeech.OnInitListener
         isReady = false
         Log.d("VoiceResponder", "Đã tắt TextToSpeech")
     }
+    fun stop() {
+        tts?.stop()
+    }
 }
