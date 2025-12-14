@@ -11,6 +11,7 @@ import androidx.fragment.app.FragmentActivity
 import com.example.smartglass.R
 import com.example.smartglass.DetectResponse.GeminiChat
 import com.example.smartglass.Navigation.NavigationCallback
+import com.example.smartglass.Navigation.NavigationListener
 import com.example.smartglass.SettingAction.SettingsManager
 import com.example.smartglass.gps.LocationHelper
 import com.google.android.material.bottomnavigation.BottomNavigationView
