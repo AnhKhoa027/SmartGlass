@@ -14,24 +14,35 @@ class VoiceResponder(private val context: Context) : TextToSpeech.OnInitListener
 
     private lateinit var tts: TextToSpeech
     private var isReady = false
+
+    // ===============================
+    // STATE
+    // ===============================
+    private var currentMode: SpeakMode? = null
+    private var isNavigationPaused = false
+
+    // ===============================
+    // QUEUE
+    // ===============================
+    private val navigationQueue: ArrayDeque<String> = ArrayDeque()
+
+    // pending khi TTS chưa init
     private var pendingText: String? = null
+    private var pendingMode: SpeakMode? = null
     private var pendingCallback: (() -> Unit)? = null
+
     private val settings = SettingsManager.getInstance(context)
 
     init {
         tts = TextToSpeech(context, this)
     }
 
+    // =====================================================
+    // INIT
+    // =====================================================
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
 
-            Log.d("VoiceResponder", "=== TTS INIT OK ===")
-
-            // Kiểm tra engine hiện tại
-            val engine = tts.defaultEngine
-            Log.d("VoiceResponder", "Engine đang dùng: $engine")
-
-            // Set audio attributes
             tts.setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
@@ -39,98 +50,140 @@ class VoiceResponder(private val context: Context) : TextToSpeech.OnInitListener
                     .build()
             )
 
-            // Ngôn ngữ tiếng Việt
-            val locale = Locale.forLanguageTag("vi-VN")
-            val result = tts.setLanguage(locale)
-            Log.d("VoiceResponder", "Kết quả setLanguage = $result")
-
-            when (result) {
-                TextToSpeech.LANG_AVAILABLE ->
-                    Log.d("VoiceResponder", "Hỗ trợ tiếng Việt (LANG_AVAILABLE)")
-
-                TextToSpeech.LANG_COUNTRY_AVAILABLE ->
-                    Log.d("VoiceResponder", "Hỗ trợ tiếng Việt + country")
-
-                TextToSpeech.LANG_COUNTRY_VAR_AVAILABLE ->
-                    Log.d("VoiceResponder", "Hỗ trợ tiếng Việt đầy đủ")
-
-                TextToSpeech.LANG_MISSING_DATA ->
-                    Log.e("VoiceResponder", "Thiếu dữ liệu giọng Việt! Phải tải voice data.")
-
-                TextToSpeech.LANG_NOT_SUPPORTED ->
-                    Log.e("VoiceResponder", "Engine KHÔNG hỗ trợ tiếng Việt!")
-
-                else ->
-                    Log.e("VoiceResponder", "Lỗi setLanguage không xác định: $result")
-            }
-
-            // Log toàn bộ voices trong máy
-            try {
-                val voices = tts.voices
-                for (v in voices) {
-                    Log.d("VoiceResponder",
-                        "Voice: ${v.name} | locale=${v.locale} | quality=${v.quality} | latency=${v.latency}")
-                }
-            } catch (e: Exception) {
-                Log.e("VoiceResponder", "Không lấy được danh sách voices: ${e.message}")
-            }
-
+            tts.setLanguage(Locale.forLanguageTag("vi-VN"))
             isReady = true
-            Log.d("VoiceResponder", "TextToSpeech đã sẵn sàng")
 
-            // Nếu có văn bản bị pending → đọc ngay
-            pendingText?.let { speak(it, pendingCallback) }
+            pendingText?.let {
+                internalSpeak(it, pendingMode ?: SpeakMode.DETECTION, pendingCallback)
+            }
+
             pendingText = null
+            pendingMode = null
             pendingCallback = null
-
-        } else {
-            Log.e("VoiceResponder", "TTS INIT ERROR: $status")
         }
     }
 
-    fun speak(text: String, onDone: (() -> Unit)? = null) {
-        if (!isReady) {
-            pendingText = text
-            pendingCallback = onDone
-            Log.w("VoiceResponder", "TTS chưa sẵn sàng → đã lưu pending")
+    // =====================================================
+    // PUBLIC API
+    // =====================================================
+
+    /** 👁️ Detection – thấp nhất */
+    fun speak(text: String) {
+        val activity = context as? MainActivity
+
+        // STT đang nghe thì bỏ
+        if (activity?.isListeningSTT == true) return
+
+        // Có mode khác đang nói thì bỏ
+        if (currentMode != null) return
+
+        internalSpeak(text, SpeakMode.DETECTION)
+    }
+
+    /** 🧭 Navigation – không bao giờ mất */
+    fun speakNavigation(text: String) {
+        navigationQueue.add(text)
+
+        if (currentMode == null || currentMode == SpeakMode.NAVIGATION) {
+            playNextNavigation()
+        }
+    }
+
+    /** 🤖 Gemini – PAUSE Navigation rồi RESUME */
+    fun speakGemini(text: String) {
+
+        tts.stop()
+        currentMode = null
+
+        if (currentMode == SpeakMode.NAVIGATION) {
+            isNavigationPaused = true
+        }
+
+        internalSpeak(text, SpeakMode.GEMINI) {
+            isNavigationPaused = false
+            playNextNavigation()
+        }
+    }
+
+
+    // =====================================================
+    // NAVIGATION CORE
+    // =====================================================
+    private fun playNextNavigation() {
+        if (isNavigationPaused) return
+        if (navigationQueue.isEmpty()) {
+            currentMode = null
             return
         }
 
+        currentMode = SpeakMode.NAVIGATION
+        val text = navigationQueue.removeFirst()
+
+        internalSpeak(text, SpeakMode.NAVIGATION) {
+            playNextNavigation()
+        }
+    }
+
+    // =====================================================
+    // CORE SPEAK (LOW LEVEL)
+    // =====================================================
+    private fun internalSpeak(
+        text: String,
+        mode: SpeakMode,
+        onDone: (() -> Unit)? = null
+    ) {
+        if (!isReady) {
+            pendingText = text
+            pendingMode = mode
+            pendingCallback = onDone
+            return
+        }
+
+        // Gemini được ngắt mọi thứ
+        if (mode == SpeakMode.GEMINI) {
+            tts.stop()
+        }
+
+        currentMode = mode
         val utteranceId = "utt_${System.currentTimeMillis()}"
 
-        // Listener hoàn thành
         tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-            override fun onStart(id: String?) {
-                Log.d("VoiceResponder", "Bắt đầu đọc: $text")
-            }
+
+            override fun onStart(id: String?) {}
 
             override fun onDone(id: String?) {
-                Log.d("VoiceResponder", "Hoàn thành đọc")
-                onDone?.let {
-                    (context as? MainActivity)?.runOnUiThread { it() }
+                if (mode != SpeakMode.NAVIGATION) {
+                    currentMode = null
                 }
+                onDone?.invoke()
             }
 
             override fun onError(id: String?) {
-                Log.e("VoiceResponder", "Lỗi khi đọc TTS")
+                currentMode = null
             }
         })
 
-        // Lấy settings từ user
-        val volumeFloat = settings.getVolumeFloat()
-        val speed = settings.getSpeedMultiplier()
-
         val params = Bundle().apply {
-            putFloat("volume", volumeFloat)
+            putFloat("volume", settings.getVolumeFloat())
         }
 
-        tts.setSpeechRate(speed)
+        tts.setSpeechRate(settings.getSpeedMultiplier())
         tts.setPitch(1.0f)
 
-        Log.d("VoiceResponder",
-            "🗣️ Đọc: \"$text\" (speed=$speed, volume=$volumeFloat)")
-
+        Log.d("VoiceResponder", "🔊 [$mode] $text")
         tts.speak(text, TextToSpeech.QUEUE_FLUSH, params, utteranceId)
+    }
+
+    // =====================================================
+    // LIFECYCLE
+    // =====================================================
+    fun stopAll() {
+        if (::tts.isInitialized) {
+            tts.stop()
+        }
+        navigationQueue.clear()
+        currentMode = null
+        isNavigationPaused = false
     }
 
     fun shutdown() {
@@ -138,10 +191,9 @@ class VoiceResponder(private val context: Context) : TextToSpeech.OnInitListener
             tts.stop()
             tts.shutdown()
         }
+        navigationQueue.clear()
+        currentMode = null
+        isNavigationPaused = false
         isReady = false
-        Log.d("VoiceResponder", "Đã tắt TextToSpeech")
-    }
-    fun stop() {
-        tts?.stop()
     }
 }

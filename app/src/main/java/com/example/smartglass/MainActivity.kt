@@ -1,4 +1,3 @@
-// File: MainActivity.kt (CẬP NHẬT HOÀN CHỈNH)
 package com.example.smartglass
 
 import android.Manifest
@@ -47,10 +46,11 @@ class MainActivity : AppCompatActivity(), NavigationCallback, NavigationListener
 
     private var greeted = false
     private val REQUEST_CODE_ALL = 1001
-    private val REQ_LOCATION = 1002 // Request code cho quyền ACCESS_FINE_LOCATION
+    private val REQ_LOCATION = 1002
 
     private val geminiApiKey = "AIzaSyCdB2dFJiYjBSL3X4-VKy3mz3jYxQ0kcIc"
     private lateinit var geminiChat: GeminiChat
+    var isListeningSTT = false
     private val mainScope = MainScope()
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var notificationManager: NotificationManager
@@ -66,19 +66,24 @@ class MainActivity : AppCompatActivity(), NavigationCallback, NavigationListener
         private const val CHANNEL_ID = "location_channel_id"
     }
 
-    private val voiceRecognitionLauncher = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == RESULT_OK) {
-            val data = result.data
-            val resultText = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.get(0)
-            if (!resultText.isNullOrBlank()) {
-                handleTranscribedText(resultText)
-            } else {
-                voiceResponder.speak(getString(R.string.voice_not_understood))
+    private val voiceRecognitionLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            isListeningSTT = false
+            val homeFragment = supportFragmentManager.findFragmentByTag("HOME_FRAGMENT") as? HomeFragment
+            homeFragment?.restartDistanceReader()
+            if (result.resultCode == RESULT_OK) {
+                val resultText = result.data
+                    ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+                    ?.get(0)
+
+                if (!resultText.isNullOrBlank()) {
+                    handleTranscribedText(resultText)
+                } else {
+                    voiceResponder.speak(getString(R.string.voice_not_understood))
+                }
             }
         }
-    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -197,11 +202,11 @@ class MainActivity : AppCompatActivity(), NavigationCallback, NavigationListener
     }
 
     override fun onSpeakInstruction(instruction: String) {
-        voiceResponder.speak(instruction)
+        voiceResponder.speakNavigation(instruction)
     }
 
     override fun onDestinationReached(destination: String) {
-        voiceResponder.speak("Bạn đã đến ${destination}. Kết thúc chỉ đường.")
+        voiceResponder.speakGemini("Bạn đã đến ${destination}. Kết thúc chỉ đường.")
     }
 
     override fun onStartLocationUpdatesRequested() {
@@ -276,7 +281,6 @@ class MainActivity : AppCompatActivity(), NavigationCallback, NavigationListener
     }
 
     private fun checkAndRequestPermissions() {
-        // ... (Logic kiểm tra và xin tất cả quyền ban đầu)
         val permissionsNeeded = mutableListOf<String>()
         val perms = listOf(
             Manifest.permission.CALL_PHONE,
@@ -298,7 +302,6 @@ class MainActivity : AppCompatActivity(), NavigationCallback, NavigationListener
     }
 
     private fun handleAllPermissionsResult(permissions: Array<out String>, grantResults: IntArray) {
-        // ... (Logic xử lý kết quả quyền)
         var micGranted = false; var camGranted = false; var locGranted = false
         var callGranted = false; var smsGranted = false; var contactsGranted = false
 
@@ -364,28 +367,31 @@ class MainActivity : AppCompatActivity(), NavigationCallback, NavigationListener
             else -> "HOME_FRAGMENT"
         }
     }
-
-    val voiceResponderOnDone = { text: String, onDoneAction: () -> Unit ->
-        voiceResponder.speak(text = text, onDone = onDoneAction)
-    }
-
     private fun initVoiceFeatures() {
-        voiceRecognitionManager = VoiceRecognitionManager(this, voiceRecognitionLauncher)
 
-        // Truyền 'this' (MainActivity triển khai NavigationListener) vào VoiceCommandProcessor
+        voiceRecognitionManager =
+            VoiceRecognitionManager(this, voiceRecognitionLauncher)
+
         voiceCommandProcessor = VoiceCommandProcessor(
             context = this,
             activity = this,
             bottomNav = bottomNavigationView,
-            onConnect = { callback -> sendCommandToHomeFragment(connect = true) },
-            onDisconnect = { callback -> sendCommandToHomeFragment(connect = false) },
-            voiceResponder = { voiceResponder.speak(it) },
-            voiceResponderOnDone = voiceResponderOnDone,
+            onConnect = { callback ->
+                sendCommandToHomeFragment(connect = true)
+                callback(true)
+            },
+            onDisconnect = { callback ->
+                sendCommandToHomeFragment(connect = false)
+                callback(true)
+            },
+            voiceResponder = voiceResponder,
             geminiChat = geminiChat,
-            NavigationCallback = this, // Truyền MainActivity (giờ là NavigationListener)
+            navigationCallback = this
         )
 
-        fabMic.setOnClickListener { voiceRecognitionManager.startListening() }
+        fabMic.setOnClickListener {
+            startSTT()
+        }
 
         if (!greeted) {
             voiceResponder.speak(getString(R.string.voice_greeting))
@@ -398,11 +404,12 @@ class MainActivity : AppCompatActivity(), NavigationCallback, NavigationListener
             rootView = findViewById(R.id.main),
             context = this,
             onHoldScreen = {
-                voiceResponder.speak("Bắt đầu nghe...")
-                voiceRecognitionManager.startListening()
+                voiceResponder.speakGemini("Bắt đầu nghe")
+                startSTT()
             }
         ).init()
     }
+
 
     fun getRealTimeDate(): String {
         val calendar = Calendar.getInstance(TimeZone.getTimeZone("Asia/Ho_Chi_Minh"))
@@ -437,9 +444,8 @@ class MainActivity : AppCompatActivity(), NavigationCallback, NavigationListener
                 sensitivity = 0.8f
             ) {
                 runOnUiThread {
-                    voiceResponder.speak("Tôi đang nghe...") {
-                        voiceRecognitionManager.startListening()
-                    }
+                    voiceResponder.speakGemini("Tôi đang nghe...")
+                    startSTT()
                 }
             }
 
@@ -463,7 +469,7 @@ class MainActivity : AppCompatActivity(), NavigationCallback, NavigationListener
 
     override fun onPause() {
         super.onPause()
-        navigationManager.stopListeningForLocation() // Đảm bảo dừng khi Activity bị Pause
+        navigationManager.stopListeningForLocation()
         wakeWordManager?.let { manager ->
             mainScope.launch(Dispatchers.Default) {
                 try { manager.stopListening() } catch (_: Exception) {}
@@ -483,6 +489,13 @@ class MainActivity : AppCompatActivity(), NavigationCallback, NavigationListener
         wakeWordManager?.stopListening()
         navigationManager.stopListeningForLocation() // Đảm bảo dừng khi Activity bị hủy
     }
+
+    private fun startSTT() {
+        isListeningSTT = true
+        voiceResponder.stopAll()
+        voiceRecognitionManager.startListening()
+    }
+
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)

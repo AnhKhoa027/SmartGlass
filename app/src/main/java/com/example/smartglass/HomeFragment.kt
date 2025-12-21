@@ -4,7 +4,6 @@ import android.content.*
 import android.hardware.usb.UsbConstants
 import android.hardware.usb.UsbManager
 import android.os.Bundle
-import android.util.Log
 import android.view.*
 import android.widget.*
 import androidx.core.graphics.toColorInt
@@ -22,12 +21,12 @@ class HomeFragment : Fragment() {
 
     private lateinit var btnConnectXiaoCam: Button
     private lateinit var textureViewCam: TextureView
-    private lateinit var glassIcon: ImageView
     private lateinit var overlayView: OverlayView
-
+    private lateinit var glassIcon: ImageView
     private lateinit var statusDot: View
     private lateinit var statusText: TextView
 
+    // ================= Core =================
     private lateinit var usbCameraViewManager: UsbCameraViewManager
     private lateinit var requestQueue: RequestQueue
 
@@ -37,17 +36,15 @@ class HomeFragment : Fragment() {
 
     private var isConnected = false
     private var isUsbCameraConnected = false
-    private var pausedForWakeWord = false
+    private var isUserDisconnecting = false
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-
     private var usbReceiver: BroadcastReceiver? = null
 
-    // Motion sensor Arduino
-    private var distanceMotionReader: DistanceMotionReader? = null
-    private var lastSensorDistance: Int = 0
-    private var lastSensorDirX: String = ""
-    private var lastSensorDirY: String = ""
+    private var distanceReader: DistanceMotionReader? = null
+    private var lastDistance = 0
+    private var lastDirX = ""
+    private var lastDirY = ""
 
     fun setVoiceResponder(vr: VoiceResponder) {
         voiceResponder = vr
@@ -62,8 +59,8 @@ class HomeFragment : Fragment() {
 
         btnConnectXiaoCam = view.findViewById(R.id.btnConnect)
         textureViewCam = view.findViewById(R.id.camera_view)
-        glassIcon = view.findViewById(R.id.glass_icon)
         overlayView = view.findViewById(R.id.overlay)
+        glassIcon = view.findViewById(R.id.glass_icon)
         statusDot = view.findViewById(R.id.camera_status_dot)
         statusText = view.findViewById(R.id.camera_status_text)
 
@@ -85,8 +82,12 @@ class HomeFragment : Fragment() {
             detectionManager,
             glassIcon
         )
+
         usbCameraViewManager.initTextureView()
         usbCameraViewManager.initUsbMonitor()
+
+        initDistanceSensor()
+        registerUsbReceiver()
 
         btnConnectXiaoCam.setOnClickListener {
             if (isConnected) disconnectFromUsbCam()
@@ -95,18 +96,16 @@ class HomeFragment : Fragment() {
 
         updateButtonState(R.string.connect, "#2F58C3", true)
         checkUsbCameraConnection(requireContext())
-        registerUsbReceiver()
-
-        initDistanceMotionSensor() // khởi tạo motion sensor
     }
 
-    // Khởi tạo DistanceMotionReader
-    private fun initDistanceMotionSensor() {
-        distanceMotionReader = DistanceMotionReader(requireContext()) { distance, dirX, dirY ->
+    private fun initDistanceSensor() {
+        distanceReader = DistanceMotionReader(requireContext()) { d, x, y ->
             if (!isConnected) return@DistanceMotionReader
-            lastSensorDistance = distance
-            lastSensorDirX = dirX
-            lastSensorDirY = dirY
+
+            lastDistance = d
+            lastDirX = x
+            lastDirY = y
+
             trySpeakDetections()
         }
     }
@@ -119,9 +118,9 @@ class HomeFragment : Fragment() {
             trackedObjects = objects,
             frameW = overlayView.width,
             frameH = overlayView.height,
-            sensorDistanceMm = lastSensorDistance,
-            sensorDirX = lastSensorDirX,
-            sensorDirY = lastSensorDirY
+            sensorDistanceMm = lastDistance,
+            sensorDirX = lastDirX,
+            sensorDirY = lastDirY
         )
     }
 
@@ -135,14 +134,24 @@ class HomeFragment : Fragment() {
 
     private fun updateCameraStatus(isConnected: Boolean) {
         if (!isAdded || isRemoving) return
-        statusDot.setBackgroundResource(if (isConnected) R.drawable.status_dot_green else R.drawable.status_dot_gray)
-        statusText.text = if (isConnected) "Đã nhận tín hiệu camera" else "Chưa nhận tín hiệu từ Camera"
+
+        statusDot.setBackgroundResource(
+            if (isConnected)
+                R.drawable.status_dot_green
+            else
+                R.drawable.status_dot_gray
+        )
+        statusText.text =
+            if (isConnected)
+                "Đã nhận tín hiệu camera"
+            else
+                "Chưa nhận tín hiệu từ Camera"
     }
 
     private fun checkUsbCameraConnection(context: Context) {
         val manager = context.getSystemService(Context.USB_SERVICE) as UsbManager
-        isUsbCameraConnected = manager.deviceList.values.any { device ->
-            device.deviceClass == UsbConstants.USB_CLASS_VIDEO
+        isUsbCameraConnected = manager.deviceList.values.any {
+            it.deviceClass == UsbConstants.USB_CLASS_VIDEO
         }
         updateCameraStatus(isUsbCameraConnected)
     }
@@ -160,10 +169,17 @@ class HomeFragment : Fragment() {
                         isUsbCameraConnected = true
                         updateCameraStatus(true)
                     }
+
                     UsbManager.ACTION_USB_DEVICE_DETACHED -> {
                         isUsbCameraConnected = false
                         updateCameraStatus(false)
-                        distanceMotionReader?.stop()
+
+                        // reset sensor data
+                        lastDistance = 0
+                        lastDirX = ""
+                        lastDirY = ""
+
+                        distanceReader?.stop()
                     }
                 }
             }
@@ -174,11 +190,15 @@ class HomeFragment : Fragment() {
 
     private fun ensureManagers() {
         if (voiceResponder == null) return
-        if (detectionSpeaker == null)
+
+        if (detectionSpeaker == null) {
             detectionSpeaker = DetectionSpeaker(voiceResponder!!)
+        }
+
         if (detectionManager == null) {
             val apiKey = getString(R.string.vision_api_key)
             val apiManager = ApiDetectionManager(apiKey)
+
             detectionManager = DetectionManager(
                 requireContext(),
                 usbCameraViewManager,
@@ -186,108 +206,123 @@ class HomeFragment : Fragment() {
                 apiManager,
                 scope
             )
-        } else detectionManager?.lastFrame = null
+        } else {
+            detectionManager?.lastFrame = null
+        }
+
         usbCameraViewManager.detectionManager = detectionManager
     }
 
     fun connectToUsbCam() {
         updateButtonState(R.string.connecting, "#808080", false)
-        voiceResponder?.speak("Đang kết nối với kính")
+
         scope.launch(Dispatchers.Main) {
             delay(5000)
             if (!isConnected && isAdded) {
                 updateButtonState(R.string.connect, "#2F58C3", true)
             }
         }
+
         try {
             ensureManagers()
 
-            usbCameraViewManager.setOnCameraStateListener(object :
-                UsbCameraViewManager.CameraStateListener {
-                override fun onCameraConnected() {
-                    if (!isAdded) return
-                    requireActivity().runOnUiThread {
-                        isConnected = true
-                        updateButtonState(R.string.connected, "#4CAF50", true)
-                        voiceResponder?.speak("Kết nối thành công")
+            usbCameraViewManager.setOnCameraStateListener(
+                object : UsbCameraViewManager.CameraStateListener {
 
-                        distanceMotionReader?.start()
+                    override fun onCameraConnected() {
+                        if (!isAdded) return
+                        requireActivity().runOnUiThread {
+                            isConnected = true
+                            updateButtonState(R.string.connected, "#4CAF50", true)
+                            voiceResponder?.speak("Kết nối thành công")
+
+                            distanceReader?.start()
+                        }
+                    }
+
+                    override fun onCameraDisconnected() {
+                        if (!isAdded) return
+                        requireActivity().runOnUiThread {
+                            isConnected = false
+                            updateButtonState(R.string.connect, "#2F58C3", true)
+                            usbCameraViewManager.showGlassIcon()
+
+                            distanceReader?.stop()
+
+                            if (!isUserDisconnecting) {
+                                voiceResponder?.speak("Đã ngắt kết nối")
+                            }
+                            isUserDisconnecting = false
+                        }
+                    }
+
+                    override fun onCameraError(error: String) {
+                        if (!isAdded) return
+                        requireActivity().runOnUiThread {
+                            isConnected = false
+                            updateButtonState(R.string.connect, "#2F58C3", true)
+                            usbCameraViewManager.showGlassIcon()
+
+                            voiceResponder?.speak("Lỗi camera: $error")
+                            distanceReader?.stop()
+                            isUserDisconnecting = false
+                        }
                     }
                 }
-
-                override fun onCameraDisconnected() {
-                    if (!isAdded) return
-                    requireActivity().runOnUiThread {
-                        isConnected = false
-                        updateButtonState(R.string.connect, "#2F58C3", true)
-                        usbCameraViewManager.showGlassIcon()
-                        voiceResponder?.speak("Camera đã ngắt kết nối")
-                        distanceMotionReader?.stop()
-                    }
-                }
-
-                override fun onCameraError(error: String) {
-                    if (!isAdded) return
-                    requireActivity().runOnUiThread {
-                        isConnected = false
-                        updateButtonState(R.string.connect, "#2F58C3", true)
-                        usbCameraViewManager.showGlassIcon()
-                        voiceResponder?.speak("Lỗi camera: $error")
-                        distanceMotionReader?.stop()
-                    }
-                }
-            })
+            )
 
             usbCameraViewManager.startCamera()
 
         } catch (e: Exception) {
             e.printStackTrace()
-            if (isAdded) requireActivity().runOnUiThread {
-                isConnected = false
-                updateButtonState(R.string.connect, "#2F58C3", true)
-                voiceResponder?.speak("Kết nối thất bại")
+            if (isAdded) {
+                requireActivity().runOnUiThread {
+                    isConnected = false
+                    updateButtonState(R.string.connect, "#2F58C3", true)
+                    voiceResponder?.speak("Kết nối thất bại")
+                }
             }
         }
     }
 
     fun disconnectFromUsbCam() {
+        isUserDisconnecting = true
+
         usbCameraViewManager.isUserRequestedConnect = false
-        try { usbCameraViewManager.showGlassIcon(); usbCameraViewManager.release() } catch (_: Exception) {}
+        try {
+            usbCameraViewManager.showGlassIcon()
+            usbCameraViewManager.release()
+        } catch (_: Exception) {}
+
         detectionSpeaker?.stop()
-        distanceMotionReader?.stop()
+        distanceReader?.stop()
+
         isConnected = false
         updateButtonState(R.string.connect, "#2F58C3", true)
-        voiceResponder?.speak("Đã ngắt kết nối")
     }
 
-    fun pauseDetectionAndSpeech() {
-        pausedForWakeWord = true
-        detectionManager?.cancelAllTasks()
-        detectionSpeaker?.stop()
+    fun restartDistanceReader() {
+        if (!isConnected) return
+        distanceReader?.stop()
+        distanceReader?.start()
     }
 
-    fun resumeDetectionAndSpeech() {
-        pausedForWakeWord = false
-        detectionSpeaker?.stop()
-    }
-
-    override fun onResume() {
-        super.onResume()
-    }
 
     override fun onPause() {
         super.onPause()
-        distanceMotionReader?.stop()
+        distanceReader?.stop()
     }
 
     override fun onDestroyView() {
         super.onDestroyView()
+
         try { usbCameraViewManager.release() } catch (_: Exception) {}
         requestQueue.cancelAll { true }
         scope.cancel()
+
         detectionManager?.release()
         detectionSpeaker?.stop()
-        distanceMotionReader?.stop()
+        distanceReader?.release()
 
         usbReceiver?.let {
             requireContext().unregisterReceiver(it)

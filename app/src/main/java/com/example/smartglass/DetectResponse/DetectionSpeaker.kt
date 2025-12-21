@@ -1,14 +1,13 @@
 package com.example.smartglass.DetectResponse
-
-    import com.example.smartglass.ObjectDetection.TrackedObject
-    import com.example.smartglass.TTSandSTT.VoiceResponder
-    import kotlin.math.roundToInt
-
-    class DetectionSpeaker(
+import com.example.smartglass.ObjectDetection.TrackedObject
+import com.example.smartglass.TTSandSTT.VoiceResponder
+import kotlin.math.roundToInt
+import android.util.Log
+class DetectionSpeaker(
         private val voiceResponder: VoiceResponder
     ) {
         private var lastSpeakTime = 0L
-        private val speakInterval = 5000L // 5 giây
+        private val speakInterval = 4000L // 5 giây
 
         private var lastSensorDirX: String = "STAY"
         private var lastSensorDirY: String = "STAY"
@@ -77,6 +76,7 @@ package com.example.smartglass.DetectResponse
             val centerObjects = trackedObjects.filter {
                 it.direction?.trim()?.equals("center", ignoreCase = true) == true
             }
+            Log.d("SENSOR_DEBUG", "Distance Ban đầu = $sensorDistanceMm")
 
             val nearestObject =
                 if (centerObjects.isNotEmpty()) {
@@ -107,11 +107,12 @@ package com.example.smartglass.DetectResponse
             // --------------------------
             // TOF LUÔN ĐƯỢC ƯU TIÊN (FIX)
             // --------------------------
-            val validDistance = sensorDistanceMm in 100..1500
+            val validDistance = sensorDistanceMm in 10..1800
             val useSensor = validDistance
 
             val finalMessage = if (useSensor) {
                 val distanceM = (sensorDistanceMm / 1000.0 * 10).roundToInt() / 10.0
+                Log.d("SENSOR_DEBUG", "sensorDistanceMm = $sensorDistanceMm")
                 "Ở $direction có $label cách khoảng $distanceM mét, $relation"
             } else {
                 // Camera fallback

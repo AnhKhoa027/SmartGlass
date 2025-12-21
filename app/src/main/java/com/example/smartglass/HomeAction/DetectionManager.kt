@@ -118,7 +118,7 @@ class DetectionManager(
             }
 
             // ---------------- API detection----------------
-            val USE_API = true // <-- true để bật, false để tắt
+            val USE_API = false // <-- true để bật, false để tắt
             if (USE_API) {
                 scope.launch(Dispatchers.IO) {
                     try {

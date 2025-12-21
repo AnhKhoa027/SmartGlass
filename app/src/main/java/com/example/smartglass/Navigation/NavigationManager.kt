@@ -1,4 +1,3 @@
-// File: Navigation/NavigationManager.kt
 package com.example.smartglass.Navigation
 
 import android.content.Context
@@ -113,19 +112,14 @@ class NavigationManager(
     fun startNavigation(destination: String) {
         if (currentLocation == null) {
             this.destination = destination
-            //listener.onSpeakInstruction("Vui lòng đợi, tôi đang xác định vị trí hiện tại của bạn.")
-            voiceResponder.speak("Vui lòng đợi, tôi đang xác định vị trí hiện tại của bạn.", onDone =
-                {
-                    waitingForInitialLocation = true
-                    // Đảm bảo GPS đang chạy để lấy vị trí
-                    listener.onStartLocationUpdatesRequested()
-                })
+            voiceResponder.speakGemini("Vui lòng đợi, tôi đang xác định vị trí hiện tại của bạn.")
+            waitingForInitialLocation = true
+            listener.onStartLocationUpdatesRequested()
             return
         }
 
         this.destination = destination
         isNavigating = false
-        //listener.onSpeakInstruction("Đã nhận lệnh: Đi đến $destination. Đang tìm đường.")
         changeLocationToGeoCoding()
     }
 
@@ -188,7 +182,7 @@ class NavigationManager(
 
                 if (currentStepIndex == steps.size - 1) {
                     // Đã hoàn thành bước cuối cùng, báo đã đến đích.
-                    voiceResponder.speak("Bạn đã đến ${destination}. Kết thúc chỉ đường.")
+                    voiceResponder.speakNavigation("Bạn đã đến ${destination}. Kết thúc chỉ đường.")
                     isNavigating = false
                 } else if (currentStepIndex < steps.size - 1) { // Nếu vẫn còn ít nhất 2 bước nữa (bước hiện tại và bước tiếp theo)
                     // Nếu KHÔNG phải là bước cuối cùng, chuyển sang đọc bước tiếp theo.
@@ -211,7 +205,7 @@ class NavigationManager(
                 if (distanceToDestination < 30) {
                     // Nếu đây là bước áp chót, chỉ cần nhắc nhở rằng đích đến sắp tới.
                     if (currentStepIndex != lastSpokenStepIndex) {
-                        voiceResponder.speak(
+                        voiceResponder.speakNavigation(
                             "Đích đến của bạn chỉ còn cách khoảng ${
                                 formatDistance(
                                     distanceToDestination.toDouble()
@@ -233,7 +227,7 @@ class NavigationManager(
                         val remainingDistance = distanceToManeuver.toDouble()
 
                         // Sử dụng remainingDistance để thông báo chính xác
-                        voiceResponder.speak(
+                        voiceResponder.speakNavigation(
                             "Sắp đến điểm rẽ. ${instruction} trong khoảng ${
                                 formatDistance(
                                     remainingDistance
@@ -284,9 +278,8 @@ class NavigationManager(
 
                 if (wrongDirCount >= 3) { // 3 lần liên tiếp (khoảng 15s)
                     Log.e("NAV_DECISION", "ĐI LỆCH ĐƯỜNG -> Kích hoạt TÍNH LẠI ROUTE")
-                    voiceResponder.speak("Bạn đã đi sai hướng, tôi đang tính lại tuyến đường.") {
-                        recalculateRoute()
-                    }
+                    voiceResponder.speakNavigation("Bạn đã đi sai hướng, tôi đang tính lại tuyến đường.")
+                    recalculateRoute()
                     wrongDirCount = 0
                     lastDistanceToManeuver = null // Reset để khởi động lại quá trình kiểm tra cho route mới
                     return true // Đã kích hoạt Re-route
@@ -320,7 +313,7 @@ class NavigationManager(
             // Gọi hàm tìm tọa độ (Geocoding) và sau đó gọi Directions (sendLocationToServer)
             changeLocationToGeoCoding()
         } else {
-            voiceResponder.speak("Không thể tính lại tuyến đường vì thiếu thông tin vị trí hoặc điểm đến.")
+            voiceResponder.speakNavigation("Không thể tính lại tuyến đường vì thiếu thông tin vị trí hoặc điểm đến.")
             isRecalculating = false // TẮT CỜ nếu lỗi ngay lập tức
         }
     }
@@ -339,7 +332,7 @@ class NavigationManager(
                 // 1. Nếu là hướng dẫn rẽ thật sự (không phải "Bắt đầu đi")
                 if (instruction!!.contains("rẽ", ignoreCase = true) ||
                     instruction.contains("đi thẳng", ignoreCase = true)) {
-                    voiceResponder.speak("${instruction},sau đó đi thêm${formattedDistance}")
+                    voiceResponder.speakNavigation("${instruction},sau đó đi thêm${formattedDistance}")
                 }
                 // 2. Xử lý trường hợp "Bắt đầu đi" (thường là bước 0)
                 else if (instruction.contains("Bắt đầu đi", ignoreCase = true) || currentStepIndex == 0) {
@@ -350,18 +343,18 @@ class NavigationManager(
                         // Nếu là bước giữa chừng có hướng dẫn là "Bắt đầu đi", giữ nguyên
                         "${instruction},sau đó đi thêm${formattedDistance}"
                     }
-                    voiceResponder.speak(startMessage)
+                    voiceResponder.speakNavigation(startMessage)
                 }
             }
             else if (currentStepIndex == steps.size) {
-                voiceResponder.speak("Bạn đã đến gần điểm cuối.")
+                voiceResponder.speakNavigation("Bạn đã đến gần điểm cuối.")
             }
         }
     }
 
     private fun changeLocationToGeoCoding() {
         if (currentLocation == null) {
-            voiceResponder.speak("Vui lòng đợi, tôi đang xác định vị trí hiện tại của bạn.")
+            voiceResponder.speakNavigation("Vui lòng đợi, tôi đang xác định vị trí hiện tại của bạn.")
             return
         }
         val place = destination ?: return
@@ -371,7 +364,7 @@ class NavigationManager(
         // KIỂM TRA API KEY (BẠN ĐÃ CÓ KEY TỪNG LÀM VIETMAP, NẾU KHÔNG PHẢI GOONG THẬT SẼ BỊ LỖI)
         if (apiKey.isEmpty() || apiKey == "YOUR_GOONG_API_KEY") {
             Log.e("GOONG_API", "LỖI: API Key Goong chưa được thiết lập!")
-            voiceResponder.speak("Lỗi thiết lập hệ thống, Key truy cập chỉ đường chưa hợp lệ.")
+            voiceResponder.speakNavigation("Lỗi thiết lập hệ thống, Key truy cập chỉ đường chưa hợp lệ.")
             return
         }
 
@@ -401,12 +394,12 @@ class NavigationManager(
                             sendLocationToServer()
                         } else {
                             Log.d("GOONG", "Lấy tọa độ thất bại")
-                            voiceResponder.speak("Xin lỗi, không tìm thấy tọa độ cho địa điểm đã nhập. Vui lòng thử lại sau.")
+                            voiceResponder.speakNavigation("Xin lỗi, không tìm thấy tọa độ cho địa điểm đã nhập. Vui lòng thử lại sau.")
                         }
                     } else {
                         val errorBody = response.errorBody()?.string()
                         Log.e("GOONG", "Geocoding API Lỗi HTTP ${response.code()}: $errorBody")
-                        voiceResponder.speak("Xin lỗi, hệ thống tìm kiếm địa điểm đang gặp sự cố. Vui lòng thử lại sau.")
+                        voiceResponder.speakNavigation("Xin lỗi, hệ thống tìm kiếm địa điểm đang gặp sự cố. Vui lòng thử lại sau.")
                     }
                 }
 
@@ -415,7 +408,7 @@ class NavigationManager(
                     t: Throwable
                 ) {
                     Log.e("GOONG", "Lỗi kết nối Geocoding: ${t.message}")
-                    voiceResponder.speak("Xin lỗi, lỗi kết nối mạng. Vui lòng kiểm tra internet và thử lại.")
+                    voiceResponder.speakNavigation("Xin lỗi, lỗi kết nối mạng. Vui lòng kiểm tra internet và thử lại.")
                 }
 
             }
@@ -447,7 +440,7 @@ class NavigationManager(
                         val leg = route?.legs?.firstOrNull() // Lấy Leg đầu tiên
 
                         if (route == null || route.legs.isNullOrEmpty()) {
-                            voiceResponder.speak("Xin lỗi, không tìm thấy đường đi khả dụng đến ${destination}.")
+                            voiceResponder.speakNavigation("Xin lỗi, không tìm thấy đường đi khả dụng đến ${destination}.")
                                                         return
                         }
 
@@ -456,7 +449,7 @@ class NavigationManager(
 
                         // Kiểm tra an toàn lần nữa
                         if (routeSteps.isNullOrEmpty()) {
-                            voiceResponder.speak("Xin lỗi, không tìm thấy chỉ dẫn chi tiết.")
+                            voiceResponder.speakNavigation("Xin lỗi, không tìm thấy chỉ dẫn chi tiết.")
                             return
                         }
                         // ==========================================================
@@ -501,20 +494,19 @@ class NavigationManager(
                         val endLon = firstStep.endLocation?.lng ?: return
                         val initialDirection = calculateInitialDirection(currentLocation!!, endLat, endLon)
 
-                        voiceResponder.speak(
-                            text = "Đã tìm thấy đường đi dài ${formatDistance(distance)}, mất ${formatDuration(duration)}. " +
-                                    "Bạn hãy bắt đầu đi về hướng ${initialDirection}.", // <-- THÊM THÔNG BÁO HƯỚNG
-                            onDone = {
-                                readCurrentStepInstruction()
-                            }
+                        voiceResponder.speakNavigation(
+                            "Đã tìm thấy đường đi dài ${formatDistance(distance)}, mất ${formatDuration(duration)}. " +
+                                    "Bạn hãy bắt đầu đi về hướng ${initialDirection}."
                         )
+                        readCurrentStepInstruction()
+
 
                     } else {
                         // Trường hợp lỗi HTTP (4xx, 5xx)
                         isRecalculating = false
                         val errorBody = response.errorBody()?.string()
                         Log.e("GOONG", "Directions API Lỗi ${response.code()}: $errorBody")
-                        voiceResponder.speak("Xin lỗi, không thể tính toán tuyến đường. Vui lòng kiểm tra địa điểm đã nhập.")
+                        voiceResponder.speakNavigation("Xin lỗi, không thể tính toán tuyến đường. Vui lòng kiểm tra địa điểm đã nhập.")
                     }
                 }
                 override fun onFailure(call: Call<GoongDirectionResponse>, t: Throwable) {

@@ -220,6 +220,7 @@ class UsbCameraViewManager(
         }
     }
 
+
     override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) {}
     override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean {
         surfaceReady = false

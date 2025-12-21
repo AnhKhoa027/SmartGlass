@@ -85,7 +85,7 @@ class location_gps : AppCompatActivity() {
             }
         } else {
             // Xử lý khi người dùng không nói hoặc lỗi nhận dạng
-            voiceResponder?.speak("Không nghe rõ, vui lòng thử lại.")
+            voiceResponder?.speakNavigation("Không nghe rõ, vui lòng thử lại.")
         }
     }
     // --- onCreate ---//
@@ -200,7 +200,7 @@ class location_gps : AppCompatActivity() {
                                 readCurrentStepInstruction() // Đọc bước mới
                             } else {
                                 // Đã đến đích
-                                voiceResponder?.speak("Bạn đã đến đích, ${destination}. Kết thúc chỉ đường.")
+                                voiceResponder?.speakNavigation("Bạn đã đến đích, ${destination}. Kết thúc chỉ đường.")
                                 isNavigating = false
                             }
                         } else if (distanceToManeuver < 100) {
@@ -219,10 +219,10 @@ class location_gps : AppCompatActivity() {
         // Setup nhận lời nói từ người dùng
         btnStartListen.setOnClickListener {
             if (isNavigating) {
-                voiceResponder?.speak("Đang trong quá trình chỉ đường. Bạn muốn dừng lại không?")
+                voiceResponder?.speakNavigation("Đang trong quá trình chỉ đường. Bạn muốn dừng lại không?")
 
             } else {
-                voiceResponder?.speak("Mời bạn nói địa điểm muốn đến.")
+                voiceResponder?.speakNavigation("Mời bạn nói địa điểm muốn đến.")
                 voiceManager?.startListening()
             }
         }
@@ -254,20 +254,20 @@ class location_gps : AppCompatActivity() {
             }
 
             if (destination.isNullOrBlank()) {
-                voiceResponder?.speak("Không tìm thấy địa điểm.")
+                voiceResponder?.speakNavigation("Không tìm thấy địa điểm.")
                 return
             }
             //destination = URLEncoder.encode(destination, "UTF-8")
-            voiceResponder?.speak(text = "Đã nhận lệnh: Đi đến $destination. Đang tìm đường.",
-                onDone = {
-                    changeLocationToGeoCoding()
-                }
+            voiceResponder?.speakNavigation(
+                "Đã nhận lệnh: Đi đến $destination. Đang tìm đường."
             )
+            changeLocationToGeoCoding()
+
 
         }catch (e: Exception)
         {
             Log.e("VoiceProcessor", "Parse lỗi: ${e.message}")
-            voiceResponder?.speak("Không nhận được địa điểm cần đến,vui lòng thử lại")
+            voiceResponder?.speakNavigation("Không nhận được địa điểm cần đến,vui lòng thử lại")
         }
 
     }
@@ -411,7 +411,7 @@ class location_gps : AppCompatActivity() {
 
     private fun changeLocationToGeoCoding() {
         if (currentLocation == null) {
-            voiceResponder?.speak("Vui lòng đợi, tôi đang xác định vị trí hiện tại của bạn.")
+            voiceResponder?.speakNavigation("Vui lòng đợi, tôi đang xác định vị trí hiện tại của bạn.")
             return
         }
         val place = destination ?: return
@@ -428,15 +428,16 @@ class location_gps : AppCompatActivity() {
                             destLon = feature.center[0]
                             destLat = feature.center[1]
                             Log.d("MAPBOX", "Đã lấy tọa độ thành công ${destLon},${destLat}")
-                            voiceResponder?.speak(text="Đã lấy tọa độ thành công ${destLon},${destLat} ",
-                                onDone = {
-                                    sendLocationToServer()
-                                })
+                            voiceResponder?.speakNavigation(
+                                "Đã xác định được vị trí điểm đến. Đang tính toán tuyến đường."
+                            )
+                            sendLocationToServer()
+
 
 
                         } else {
                             Log.d("MAPBOX", "Lấy tọa độ thất bại")
-                            voiceResponder?.speak("Xin lỗi, hệ thống tìm kiếm địa điểm đang gặp sự cố. Vui lòng thử lại sau.")
+                            voiceResponder?.speakNavigation("Xin lỗi, hệ thống tìm kiếm địa điểm đang gặp sự cố. Vui lòng thử lại sau.")
                         }
                     }
                 }
@@ -446,7 +447,7 @@ class location_gps : AppCompatActivity() {
                     t: Throwable
                 ) {
                     Log.d("MAPBOX", "Lỗi kết nối")
-                    voiceResponder?.speak("Xin lỗi, lỗi kết nối mạng. Vui lòng kiểm tra internet và thử lại.")
+                    voiceResponder?.speakNavigation("Xin lỗi, lỗi kết nối mạng. Vui lòng kiểm tra internet và thử lại.")
                 }
 
             }
@@ -471,7 +472,7 @@ class location_gps : AppCompatActivity() {
                         val steps = leg?.steps ?: emptyList()
 
                         if (steps.isEmpty()) {
-                            voiceResponder?.speak("Xin lỗi, không tìm thấy đường đi khả dụng đến ${destination}.")
+                            voiceResponder?.speakNavigation("Xin lỗi, không tìm thấy đường đi khả dụng đến ${destination}.")
                             Toast.makeText(this@location_gps, "Không tìm thấy chỉ dẫn", Toast.LENGTH_SHORT).show()
                             return
                         }
@@ -482,17 +483,15 @@ class location_gps : AppCompatActivity() {
 
                         val distance = route?.distance ?: 0.0
                         val duration = route?.duration ?: 0.0
-                        voiceResponder?.speak(text="Đã tìm thấy đường đi dài ${formatDistance(distance)}, mất ${formatDuration(duration)}. Bắt đầu chỉ đường.",
-                            onDone = {
-                                readCurrentStepInstruction()
-                                currentStepIndex++
-                            })
+                        voiceResponder?.speakNavigation(text="Đã tìm thấy đường đi dài ${formatDistance(distance)}, mất ${formatDuration(duration)}. Bắt đầu chỉ đường.",)
+                        readCurrentStepInstruction()
+                        currentStepIndex++
 
                     } else {
                         // Trường hợp lỗi HTTP (4xx, 5xx)
                         val errorBody = response.errorBody()?.string()
                         Log.e("MAPBOX", "Directions API Lỗi ${response.code()}: $errorBody")
-                        voiceResponder?.speak("Xin lỗi, không thể tính toán tuyến đường. Vui lòng kiểm tra địa điểm đã nhập.")
+                        voiceResponder?.speakNavigation("Xin lỗi, không thể tính toán tuyến đường. Vui lòng kiểm tra địa điểm đã nhập.")
                     }
                 }
                 override fun onFailure(call: Call<MapboxResponse>, t: Throwable) {
