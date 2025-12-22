@@ -333,15 +333,45 @@ class VoiceCommandProcessor(
     // =========================
     private fun adjustVolume(value: String) {
         val current = settings.getVolume()
-        val newVol = when {
-            value.contains("tăng") -> (current + 10).coerceAtMost(100)
-            value.contains("giảm") -> (current - 10).coerceAtLeast(0)
-            value.matches(Regex("\\d+")) -> value.toInt().coerceIn(0, 100)
-            else -> current
+        var newVol = current
+
+        val numberInText = "\\d+".toRegex().find(value)?.value?.toInt() ?: -1
+
+        val increaseWords = listOf("tăng", "làm to", "bật", "làm âm lượng thật to")
+        val decreaseWords = listOf("giảm", "làm nhỏ", "hạ", "làm âm lượng thật nhỏ")
+        val upWords = listOf("lên", "cao")
+        val downWords = listOf("xuống", "thấp")
+
+        when {
+            // Lệnh tăng lên mức cụ thể
+            increaseWords.any { value.contains(it) } && upWords.any { value.contains(it) } && numberInText != -1 -> {
+                newVol = numberInText.coerceIn(0, 100)
+            }
+
+            // Lệnh giảm xuống mức cụ thể
+            decreaseWords.any { value.contains(it) } && downWords.any { value.contains(it) } && numberInText != -1 -> {
+                newVol = numberInText.coerceIn(0, 100)
+            }
+
+            // Lệnh tăng/giảm thông thường
+            increaseWords.any { value.contains(it) } -> {
+                val number = numberInText.takeIf { it != -1 } ?: 10
+                newVol = (current + number).coerceAtMost(100)
+            }
+
+            decreaseWords.any { value.contains(it) } -> {
+                val number = numberInText.takeIf { it != -1 } ?: 10
+                newVol = (current - number).coerceAtLeast(0)
+            }
+
+            // Nếu chỉ nói số → đặt trực tiếp
+            value.matches(Regex("\\d+")) -> newVol = numberInText.coerceIn(0, 100)
         }
+
         settings.setVolume(newVol)
-        speak("Âm lượng $newVol phần trăm")
+        speak("Âm lượng hiện tại $newVol")
     }
+
 
     private fun adjustSpeed(value: String) {
         val speeds = listOf("very_slow", "slow", "normal", "fast", "very_fast")

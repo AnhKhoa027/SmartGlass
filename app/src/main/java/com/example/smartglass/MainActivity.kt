@@ -48,7 +48,7 @@ class MainActivity : AppCompatActivity(), NavigationCallback, NavigationListener
     private val REQUEST_CODE_ALL = 1001
     private val REQ_LOCATION = 1002
 
-    private val geminiApiKey = "AIzaSyCdB2dFJiYjBSL3X4-VKy3mz3jYxQ0kcIc"
+    private val geminiApiKey = "AIzaSyCJjs0RbwexaMQXr_851xKPX4zyV4p2Jlg"
     private lateinit var geminiChat: GeminiChat
     var isListeningSTT = false
     private val mainScope = MainScope()
@@ -56,7 +56,7 @@ class MainActivity : AppCompatActivity(), NavigationCallback, NavigationListener
     private lateinit var notificationManager: NotificationManager
     private lateinit var locationRequest: LocationRequest
 
-    private lateinit var navigationManager: NavigationManager // KHAI BÁO MANAGER MỚI
+    private lateinit var navigationManager: NavigationManager
 
     private val GOONG_API_KEY = "1hDHs4M7KJHX3mCe1cTzxVxtFvs3hHVyuP6wdEDh"
 

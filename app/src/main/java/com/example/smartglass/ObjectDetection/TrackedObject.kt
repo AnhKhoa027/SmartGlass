@@ -1,6 +1,9 @@
 package com.example.smartglass.ObjectDetection
+import java.util.concurrent.atomic.AtomicInteger
 
+private val ID_GEN = AtomicInteger(0)
 data class TrackedObject(
+    val id: Int = ID_GEN.incrementAndGet(),
     var box: BoundingBox,
     var lastSeen: Long,
     var smoothBox: BoundingBox,

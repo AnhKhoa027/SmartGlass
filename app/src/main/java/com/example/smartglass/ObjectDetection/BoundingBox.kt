@@ -14,6 +14,13 @@ data class BoundingBox(
     val cnf: Float,
     val cls: Int,
     val clsName: String,
+    val source: DetectSource = DetectSource.YOLO,
     // Thêm màu sắc (Mặc định xanh lá)
     val boxColor: Int = Color.GREEN
 )
+
+enum class DetectSource {
+    YOLO,
+    CLASSIFIER,
+    API
+}
