@@ -8,7 +8,6 @@ import com.example.smartglass.ObjectDetection.*
 import com.example.smartglass.DetectResponse.DetectionSpeaker
 import kotlinx.coroutines.*
 import kotlin.text.compareTo
-import com.example.smartglass.DetectResponse.LabelTranslator
 
 class DetectionManager(
     context: Context,

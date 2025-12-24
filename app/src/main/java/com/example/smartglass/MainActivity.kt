@@ -48,7 +48,7 @@ class MainActivity : AppCompatActivity(), NavigationCallback, NavigationListener
     private val requestCodeAll = 1001
     private val reqLocation = 1002
 
-    private val geminiApiKey = ""
+    private val geminiApiKey = "AIzaSyDtvB1lcgTS77uvMzp189TYjBSeHf2PNiQ"
     private lateinit var geminiChat: GeminiChat
     var isListeningSTT = false
     private val mainScope = MainScope()
