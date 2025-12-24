@@ -5,6 +5,7 @@ import com.example.smartglass.ObjectDetection.DetectSource
 import com.example.smartglass.ObjectDetection.TrackedObject
 import com.example.smartglass.TTSandSTT.VoiceResponder
 import kotlin.math.roundToInt
+import com.example.smartglass.DetectResponse.LabelTranslator
 
 class DetectionSpeaker(
     private val voiceResponder: VoiceResponder
@@ -108,7 +109,7 @@ class DetectionSpeaker(
 
         val key = SpokenKey(
             objectId = nearestObject.id,
-            label = box.clsName,
+            label = LabelTranslator.toVietnamese(box.clsName),
             source = box.source
         )
 

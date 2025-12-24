@@ -5,15 +5,14 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.os.Looper
 import android.util.Log
-import android.widget.Toast
 import androidx.core.app.ActivityCompat
-import com.example.smartglass.MainActivity
 import com.example.smartglass.TTSandSTT.VoiceResponder
 import com.example.smartglass.gps.*
 import com.google.android.gms.location.*
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
+import java.util.Locale
 
 class NavigationManager(
     private val context: Context,
@@ -22,88 +21,47 @@ class NavigationManager(
     private val fusedLocationClient: FusedLocationProviderClient,
     private val locationRequest: LocationRequest,
     private val goongApiKey: String
-) : LocationCallback() { // Kế thừa LocationCallback để nhận kết quả GPS
-
+) : LocationCallback() {
     private var currentLocation: Location? = null
     private var destination: String? = null
     private var destLon: Double? = null
     private var destLat: Double? = null
     private var routeSteps: List<GoongStep>? = null
     private var waitingForInitialLocation = false
-
-    // Trạng thái điều hướng
     var isNavigating = false
     var currentStepIndex = 0
     private var isRecalculating = false
     private var lastSpokenStepIndex = -1
     private var lastDistanceToManeuver: Float? = null
     private var wrongDirCount = 0
-
-    private val TAG = "NavManager"
-    private val WRONG_DIRECTION_TOLERANCE_METERS = 10f // Ngưỡng sai lệch cho re-route
-
-    // ==========================================================
-    // 🟢 HÀM QUẢN LÝ VỊ TRÍ (Được gọi từ MainActivity)
-    // ==========================================================
-
+    private val wrongDirection = 10f
     fun startListeningForLocation() {
         if (ActivityCompat.checkSelfPermission(
                 context,
                 android.Manifest.permission.ACCESS_FINE_LOCATION
             ) != PackageManager.PERMISSION_GRANTED
         ) {
-            // Yêu cầu Activity xử lý việc xin quyền
-            Log.e(TAG, "Thiếu quyền GPS, yêu cầu Activity xử lý.")
             return
         }
-        // Đăng ký nhận cập nhật vị trí, truyền 'this' làm callback
         fusedLocationClient.requestLocationUpdates(
             locationRequest,
-            this, // NavigationManager tự xử lý callback vị trí
+            this,
             Looper.getMainLooper()
         )
     }
-
     fun stopListeningForLocation() {
         fusedLocationClient.removeLocationUpdates(this)
-        Log.i(TAG, "Dừng lắng nghe vị trí.")
     }
 
     override fun onLocationResult(locationResult: LocationResult) {
         super.onLocationResult(locationResult)
         val latestLocation = locationResult.lastLocation ?: return
-        // --- Bắt đầu Logic Ghi Log GPS ---
-        val speedMps = latestLocation.speed // Tốc độ tính bằng mét/giây
-        val speedKmh = speedMps * 3.6f // Chuyển sang km/h
-
-        if (currentLocation == null) {
-            Log.d("GPS_UPDATE", "Vị trí ban đầu đã được nhận.")
-        } else {
-            val distance = currentLocation!!.distanceTo(latestLocation)
-            val timeElapsed = (latestLocation.time - currentLocation!!.time) / 1000.0 // Thời gian trôi qua (giây)
-
-            Log.d(
-                "GPS_UPDATE",
-                "Long: ${latestLocation.longitude}, Lat: ${latestLocation.latitude} | " +
-                        "Di chuyển: ${String.format("%.2f m", distance)} | " +
-                        "Tốc độ: ${String.format("%.2f km/h", speedKmh)}"
-            )
-
-            // Kiểm tra và ghi log nếu có sự thay đổi lớn (ví dụ: di chuyển hơn 1 mét)
-            if (distance > 1.0) {
-                Log.i("GPS_CHANGE", "Vị trí đã thay đổi đáng kể (${String.format("%.2f m", distance)})")
-            }
-        }
-        // --- Kết thúc Logic Ghi Log GPS ---
         currentLocation = latestLocation
         listener.onLocationUpdate(latestLocation)
-        // 1. Logic chờ vị trí ban đầu
         if (waitingForInitialLocation) {
             waitingForInitialLocation = false
             destination?.let { changeLocationToGeoCoding() }
         }
-
-        // 2. Logic điều hướng
         if (isNavigating && !routeSteps.isNullOrEmpty()) {
             handleNavigationStep(latestLocation)
         }
@@ -112,6 +70,7 @@ class NavigationManager(
     fun startNavigation(destination: String) {
         if (currentLocation == null) {
             this.destination = destination
+            voiceResponder.speakGemini("Hãy di chuyển vài bước để tôi xác định hướng của bạn")
             voiceResponder.speakGemini("Vui lòng đợi, tôi đang xác định vị trí hiện tại của bạn.")
             waitingForInitialLocation = true
             listener.onStartLocationUpdatesRequested()
@@ -141,8 +100,6 @@ class NavigationManager(
 
     private fun handleNavigationStep(latestLocation: Location) {
         val steps: List<GoongStep> = routeSteps!!
-
-        // Chỉ xử lý nếu chưa đến bước cuối cùng
         val finalStep = steps.last()
         val destinationLat = finalStep.endLocation?.lat ?: 0.0
         val destinationLon = finalStep.endLocation?.lng ?: 0.0
@@ -154,103 +111,58 @@ class NavigationManager(
             resultsToDestination
         )
         val distanceToDestination =
-            resultsToDestination[0] // Khoảng cách đến đích cuối cùng (meters)
+            resultsToDestination[0]
         if (currentStepIndex >= 0 && currentStepIndex < steps.size) {
             val step = steps[currentStepIndex]
             val turnLat = step.endLocation?.lat ?: 0.0
             val turnLon = step.endLocation?.lng ?: 0.0
-
             val results = FloatArray(1)
             Location.distanceBetween(
                 latestLocation.latitude, latestLocation.longitude,
                 turnLat, turnLon,
                 results
             )
-            val distanceToManeuver = results[0] // Khoảng cách đến điểm ngoặt (meters)
-
-            Log.d("NAV_STEP", "Bước $currentStepIndex: Cách ${distanceToManeuver}m")
-
-            // Hàm này sẽ kiểm tra và nếu thấy sai đường sẽ gọi recalculateRoute()
-            // và thoát khỏi phần xử lý bước rẽ (vì route cũ đã bị hủy).
+            val distanceToManeuver = results[0]
             if (checkOffRouteAndReroute(latestLocation, steps)) {
-                // Nếu hàm trả về true (đã kích hoạt re-route), thì ta dừng xử lý chuyển bước
                 return
             }
-            // Kiểm tra: Nếu gần đến điểm ngoặt (ví dụ dưới 20 mét)
             if (distanceToManeuver < 10) {
-                // Đã hoàn thành bước hiện tại
-
                 if (currentStepIndex == steps.size - 1) {
-                    // Đã hoàn thành bước cuối cùng, báo đã đến đích.
                     voiceResponder.speakNavigation("Bạn đã đến ${destination}. Kết thúc chỉ đường.")
                     isNavigating = false
-                } else if (currentStepIndex < steps.size - 1) { // Nếu vẫn còn ít nhất 2 bước nữa (bước hiện tại và bước tiếp theo)
-                    // Nếu KHÔNG phải là bước cuối cùng, chuyển sang đọc bước tiếp theo.
-                    currentStepIndex++ // Tăng index lên bước tiếp theo (N+1)
-                    readCurrentStepInstruction() // Đọc hướng dẫn của bước N+1
-                    lastSpokenStepIndex = -1 // Reset cờ nhắc nhở cho bước mới
-                    Log.i(
-                        "NAV_DECISION",
-                        "ĐÃ ĐẠT NGƯỠNG RẼ (< 5m) -> Chuyển sang đọc bước ${currentStepIndex}!"
-                    )
+                } else if (currentStepIndex < steps.size - 1) {
+                    currentStepIndex++
+                    readCurrentStepInstruction()
+                    lastSpokenStepIndex = -1
                 }
-
-                // Lưu ý: Trường hợp currentStepIndex >= steps.size đã được loại trừ ở bên ngoài.
-
-                // Thoát khỏi hàm để không chạy logic nhắc nhở dưới đây cho bước vừa hoàn thành
                 return
-            } else if (distanceToManeuver < 20)//&& lastSpokenStepIndex < currentStepIndex)
+            } else if (distanceToManeuver < 20)
             {
-                // 1. KIỂM TRA: NẾU ĐANG Ở BƯỚC ÁP CHÓT (chỉ còn 1 bước nữa là hết)
                 if (distanceToDestination < 30) {
-                    // Nếu đây là bước áp chót, chỉ cần nhắc nhở rằng đích đến sắp tới.
                     if (currentStepIndex != lastSpokenStepIndex) {
                         voiceResponder.speakNavigation(
-                            "Đích đến của bạn chỉ còn cách khoảng ${
-                                formatDistance(
-                                    distanceToDestination.toDouble()
-                                )
-                            }."
+                            "Đích đến của bạn chỉ còn cách khoảng ${formatDistance(distanceToDestination.toDouble())}."
                         )
                         lastSpokenStepIndex = currentStepIndex
                     }
                 }
-                // 2. NGƯỢC LẠI: LÀ BƯỚC GIỮA ĐƯỜNG, ĐỌC HƯỚNG DẪN RẼ
                 else {
                     if (currentStepIndex != lastSpokenStepIndex) {
-                        Log.w(
-                            "NAV_DECISION",
-                            "Đang nhắc nhở bước $currentStepIndex, khoảng cách còn lại: ${distanceToManeuver}m"
-                        )
-
                         val instruction = step.htmlInstructions
                         val remainingDistance = distanceToManeuver.toDouble()
-
-                        // Sử dụng remainingDistance để thông báo chính xác
                         voiceResponder.speakNavigation(
-                            "Sắp đến điểm rẽ. ${instruction} trong khoảng ${
-                                formatDistance(
-                                    remainingDistance
-                                )
-                            } "
+                            "Sắp đến điểm rẽ. ${instruction} trong khoảng ${formatDistance(remainingDistance)} "
                         )
-
-                        // Cập nhật cờ: Đánh dấu bước này đã được nhắc nhở
                         lastSpokenStepIndex = currentStepIndex
                     }
                 }
             }
         }
     }
-
-    // Hàm kiểm tra và gọi tính lại tuyến đường
     private fun checkOffRouteAndReroute(currentLocation: Location, steps: List<GoongStep>): Boolean {
-        // 1. Kiểm tra an toàn: Đã đến đích chưa
         if (currentStepIndex >= steps.size) return false
-
-        // 2. TÍNH KHOẢNG CÁCH ĐẾN ĐIỂM RẼ TIẾP THEO
-        val targetLat = steps[currentStepIndex].endLocation?.lat ?: 0.0 // Lấy từ endLocation
-        val targetLon = steps[currentStepIndex].endLocation?.lng ?: 0.0 // Lấy từ endLocation
+        val targetLat = steps[currentStepIndex].endLocation?.lat ?: 0.0
+        val targetLon = steps[currentStepIndex].endLocation?.lng ?: 0.0
 
         val results = FloatArray(1)
         Location.distanceBetween(
@@ -258,89 +170,64 @@ class NavigationManager(
             targetLat, targetLon,
             results
         )
-        val currentDistance = results[0] // <-- BIẾN currentDistance ĐÃ ĐƯỢC TÍNH TẠI ĐÂY
-
-        // 3. KIỂM TRA KHỞI TẠO (Lần đầu nhận vị trí sau khi tính đường)
+        val currentDistance = results[0]
         if (lastDistanceToManeuver == null) {
-            lastDistanceToManeuver = currentDistance // Gán giá trị currentDistance đã tính
-            return false // Thoát, chưa cần kiểm tra sai đường
+            lastDistanceToManeuver = currentDistance
+            return false
         }
-
-        // 4. KIỂM TRA SAI LỆCH VÀ RE-ROUTE
         if (isRecalculating) return true
-        // Chỉ kiểm tra khi không quá gần điểm rẽ (ví dụ > 10m), vì ở gần rẽ GPS có thể nhiễu
         if (currentDistance > 10) {
-
-            // Nếu khoảng cách MỚI lớn hơn khoảng cách CŨ + một ngưỡng an toàn
-            if (currentDistance > lastDistanceToManeuver!! + WRONG_DIRECTION_TOLERANCE_METERS) {
+            if (currentDistance > lastDistanceToManeuver!! + wrongDirection) {
                 wrongDirCount++
-                Log.w("NAV_DEVIATION", "Khoảng cách TĂNG: ${lastDistanceToManeuver} -> $currentDistance (count=$wrongDirCount)")
-
                 if (wrongDirCount >= 3) { // 3 lần liên tiếp (khoảng 15s)
-                    Log.e("NAV_DECISION", "ĐI LỆCH ĐƯỜNG -> Kích hoạt TÍNH LẠI ROUTE")
                     voiceResponder.speakNavigation("Bạn đã đi sai hướng, tôi đang tính lại tuyến đường.")
                     recalculateRoute()
                     wrongDirCount = 0
-                    lastDistanceToManeuver = null // Reset để khởi động lại quá trình kiểm tra cho route mới
-                    return true // Đã kích hoạt Re-route
+                    lastDistanceToManeuver = null
+                    return true
                 }
             } else if (currentDistance < lastDistanceToManeuver!! - 1) {
                 // Nếu khoảng cách GIẢM ổn định (đi đúng)
                 wrongDirCount = 0
             }
         }
-
-        // 5. CẬP NHẬT TRẠNG THÁI CUỐI
         lastDistanceToManeuver = currentDistance
         return false
     }
 
     private fun recalculateRoute() {
-        // 1. Dọn dẹp trạng thái điều hướng hiện tại
         if (isRecalculating) {
-            Log.d("NAV_DECISION", "Đã có lệnh tính lại đường, bỏ qua lệnh này.")
             return
         }
-        isRecalculating = true // BẬT CỜ
+        isRecalculating = true
         isNavigating = false
         routeSteps = null
         currentStepIndex = 0
         lastDistanceToManeuver = null
         wrongDirCount = 0
-
-        // 2. Tái sử dụng logic Geocoding và Directions
         if (currentLocation != null && destination != null) {
-            // Gọi hàm tìm tọa độ (Geocoding) và sau đó gọi Directions (sendLocationToServer)
             changeLocationToGeoCoding()
         } else {
             voiceResponder.speakNavigation("Không thể tính lại tuyến đường vì thiếu thông tin vị trí hoặc điểm đến.")
-            isRecalculating = false // TẮT CỜ nếu lỗi ngay lập tức
+            isRecalculating = false
         }
     }
-
-    // Hàm đọc hướng dẫn rẽ (Được gọi từ handleNavigationStep)
     fun readCurrentStepInstruction() {
         routeSteps?.let { steps ->
             if (currentStepIndex >= 0 && currentStepIndex < steps.size) {
                 val step = steps[currentStepIndex]
-
-                // Lấy instruction và distance
                 val instruction = step.htmlInstructions
                 val distance = step.distance?.value?.toDouble() ?: 0.0
-
                 val formattedDistance = formatDistance(distance)
-                // 1. Nếu là hướng dẫn rẽ thật sự (không phải "Bắt đầu đi")
                 if (instruction!!.contains("rẽ", ignoreCase = true) ||
                     instruction.contains("đi thẳng", ignoreCase = true)) {
                     voiceResponder.speakNavigation("${instruction},sau đó đi thêm${formattedDistance}")
                 }
-                // 2. Xử lý trường hợp "Bắt đầu đi" (thường là bước 0)
                 else if (instruction.contains("Bắt đầu đi", ignoreCase = true) || currentStepIndex == 0) {
                     val startMessage = if (currentStepIndex == 0) {
                         // Đối với bước 0, chỉ cần xác nhận và nói khoảng cách:
                         "Hãy bắt đầu di chuyển. Bạn cần đi ${formattedDistance}."
                     } else {
-                        // Nếu là bước giữa chừng có hướng dẫn là "Bắt đầu đi", giữ nguyên
                         "${instruction},sau đó đi thêm${formattedDistance}"
                     }
                     voiceResponder.speakNavigation(startMessage)
@@ -358,145 +245,87 @@ class NavigationManager(
             return
         }
         val place = destination ?: return
-
-        val apiKey = goongApiKey // <-- SỬ DỤNG KEY GOONG
-
-        // KIỂM TRA API KEY (BẠN ĐÃ CÓ KEY TỪNG LÀM VIETMAP, NẾU KHÔNG PHẢI GOONG THẬT SẼ BỊ LỖI)
+        val apiKey = goongApiKey
         if (apiKey.isEmpty() || apiKey == "YOUR_GOONG_API_KEY") {
-            Log.e("GOONG_API", "LỖI: API Key Goong chưa được thiết lập!")
             voiceResponder.speakNavigation("Lỗi thiết lập hệ thống, Key truy cập chỉ đường chưa hợp lệ.")
             return
         }
-
-        // Tạo chuỗi tọa độ ưu tiên theo format Goong: lat,lng
         val proximityLocation = "${currentLocation!!.latitude},${currentLocation!!.longitude}"
-
-        // GỌI GOONG GEOCoding (ĐÃ SỬA TÊN CLIENT)
         GoongRetrofitClient.goongApi.getGeocoding(
             address = place,
             apiKey = apiKey,
-            location = proximityLocation // Dùng vị trí hiện tại để ưu tiên kết quả gần nhất
+            location = proximityLocation
         )
-            .enqueue(object : Callback<GoongGeocodingResponse> { // <-- DÙNG GOONG RESPONSE
+            .enqueue(object : Callback<GoongGeocodingResponse> {
                 override fun onResponse(
                     call: Call<GoongGeocodingResponse>,
                     response: Response<GoongGeocodingResponse>
                 ) {
                     if (response.isSuccessful) {
-                        // Lấy tọa độ từ phản hồi Goong: results[0].geometry.location
                         val location = response.body()?.results?.firstOrNull()?.geometry?.location
 
                         if (location != null) {
-                            // Goong trả về {lat, lng}
                             destLon = location.lng
                             destLat = location.lat
-                            Log.d("GOONG", "Đã lấy tọa độ thành công Lon:${destLon},Lat:${destLat}")
                             sendLocationToServer()
                         } else {
-                            Log.d("GOONG", "Lấy tọa độ thất bại")
                             voiceResponder.speakNavigation("Xin lỗi, không tìm thấy tọa độ cho địa điểm đã nhập. Vui lòng thử lại sau.")
                         }
                     } else {
-                        val errorBody = response.errorBody()?.string()
-                        Log.e("GOONG", "Geocoding API Lỗi HTTP ${response.code()}: $errorBody")
                         voiceResponder.speakNavigation("Xin lỗi, hệ thống tìm kiếm địa điểm đang gặp sự cố. Vui lòng thử lại sau.")
                     }
                 }
 
                 override fun onFailure(
-                    call: retrofit2.Call<GoongGeocodingResponse>,
+                    call:Call<GoongGeocodingResponse>,
                     t: Throwable
                 ) {
-                    Log.e("GOONG", "Lỗi kết nối Geocoding: ${t.message}")
                     voiceResponder.speakNavigation("Xin lỗi, lỗi kết nối mạng. Vui lòng kiểm tra internet và thử lại.")
                 }
 
-            }
-            )
+            })
     }
-
     private fun sendLocationToServer() {
         val origin = currentLocation ?: return
-
-        // Directions API Goong dùng format LAT,LON
         val originStr = "${origin.latitude},${origin.longitude}"
         val destinationStr = "${destLat},${destLon}"
-
         val apiKey =goongApiKey
-
-        // GỌI GOONG DIRECTIONS (ĐÃ SỬA TÊN CLIENT)
         GoongRetrofitClient.goongApi.getDirections(
             origin = originStr,
             destination = destinationStr,
             vehicle = "bike",
             apiKey = apiKey
         )
-            .enqueue(object : Callback<GoongDirectionResponse> { // <-- DÙNG GOONG RESPONSE
+            .enqueue(object : Callback<GoongDirectionResponse> {
                 override fun onResponse(call: Call<GoongDirectionResponse>, response: Response<GoongDirectionResponse>) {
-                    Log.d("GOONG_RAW", response.body().toString())
                     if (response.isSuccessful) {
 
                         val route = response.body()?.routes?.firstOrNull()
                         val leg = route?.legs?.firstOrNull() // Lấy Leg đầu tiên
 
                         if (route == null || route.legs.isNullOrEmpty()) {
-                            voiceResponder.speakNavigation("Xin lỗi, không tìm thấy đường đi khả dụng đến ${destination}.")
+                            voiceResponder.speakNavigation(text="Xin lỗi, không tìm thấy đường đi khả dụng đến ${destination}.")
                                                         return
                         }
-
-                        // SỬ DỤNG PARSER CỦA GOONG
                         routeSteps = GoongStepsParser.parseSteps(response.body()) // <-- DÙNG GOONG PARSER
-
-                        // Kiểm tra an toàn lần nữa
                         if (routeSteps.isNullOrEmpty()) {
                             voiceResponder.speakNavigation("Xin lỗi, không tìm thấy chỉ dẫn chi tiết.")
                             return
                         }
-                        // ==========================================================
-                        // 🚀 LOGIC IN RA LOGCAT ĐỂ KIỂM TRA DEBUGGING
-                        // ==========================================================
-                        Log.i("GOONG_NAV", "========================================")
-                        Log.i("GOONG_NAV", "Tuyến đường có ${routeSteps!!.size} bước:")
-
-                        routeSteps!!.forEachIndexed { index, step ->
-                            // Lấy giá trị số (Int) từ GoongValue, chuyển sang Double
-                            val dist = step.distance?.value?.toDouble() ?: 0.0
-                            val dur = step.duration?.value?.toDouble() ?: 0.0
-
-                            // Lấy tọa độ cuối của bước đi (điểm rẽ/mục tiêu)
-                            val endLat = step.endLocation?.lat
-                            val endLon = step.endLocation?.lng
-
-                            // Lấy hướng dẫn (instruction)
-                            val instruction = step.htmlInstructions ?: "Không có hướng dẫn HTML"
-
-                            Log.i("GOONG_NAV",
-                                "STEP $index: " +
-                                        "| Hướng dẫn: $instruction | " +
-                                        "| Khoảng cách: ${formatDistance(dist)} | " +
-                                        "| Thời gian: ${formatDuration(dur)} | " +
-                                        "| Tọa độ đích (Lat/Lon): (${endLat}, ${endLon})"
-                            )
-                        }
-                        Log.i("GOONG_NAV", "========================================")
-                        // ==========================================================
-
                         isNavigating = true
                         currentStepIndex = 0
-
-                        // LẤY TỔNG KHOẢNG CÁCH VÀ THỜI GIAN TỪ LEG (SỬ DỤNG .value)
                         val distance = leg?.distance?.value?.toDouble() ?: 0.0
                         val duration = leg?.duration?.value?.toDouble() ?: 0.0
 
                         isRecalculating = false
                         val firstStep = routeSteps?.firstOrNull() ?: return
-                        val endLat = firstStep.endLocation?.lat ?: return
-                        val endLon = firstStep.endLocation?.lng ?: return
-                        val initialDirection = calculateInitialDirection(currentLocation!!, endLat, endLon)
+                        val endLat = firstStep.endLocation?.lat
+                        val endLon = firstStep.endLocation?.lng
+                        val initialDirection = calculateInitialDirection(currentLocation!!, endLat!!, endLon!!)
 
                         voiceResponder.speakNavigation(
                             "Đã tìm thấy đường đi dài ${formatDistance(distance)}, mất ${formatDuration(duration)}. " +
-                                    "Bạn hãy bắt đầu đi về hướng ${initialDirection}."
+                                    "Bạn hãy ${initialDirection}."
                         )
                         readCurrentStepInstruction()
 
@@ -511,13 +340,13 @@ class NavigationManager(
                 }
                 override fun onFailure(call: Call<GoongDirectionResponse>, t: Throwable) {
                     isRecalculating = false
-                    Log.e(TAG, "Directions Lỗi: ${t.message}")
                                    }
             })
     }
 
     // Giữ nguyên các hàm này
     private fun calculateInitialDirection(start: Location, endLat: Double, endLon: Double): String {
+        /*
         // 1. Tính Bearing (Góc la bàn) giữa hai điểm
         val results = FloatArray(3)
         // Android's Location.distanceBetween cũng tính Bearing (initialBearing)
@@ -543,13 +372,42 @@ class NavigationManager(
             angle >= 247.5 && angle < 292.5 -> "Tây"
             else -> "Tây Bắc" // 292.5 - 337.5
         }
+         */
+        val userDirection=start.bearing.toDouble()
+        val results= FloatArray(3)
+        Location.distanceBetween(
+            start.latitude,start.longitude,
+            endLat,endLon,
+            results
+        )
+        val directionTarget=results[0].toDouble()
+        val diff=(directionTarget-userDirection+360)%360
+        return when {
+            diff < 15 || diff > 345 ->
+                "Đi thẳng"
+
+            diff in 15.0..45.0 ->
+                "Chếch phải một chút"
+
+            diff in 45.0..120.0 ->
+                "Rẽ phải"
+
+            diff in 120.0..240.0 ->
+                "Quay lại"
+
+            diff in 240.0..315.0 ->
+                "Rẽ trái"
+
+            else ->
+                "Chếch trái một chút"
+        }
     }
     private fun formatDistance(meters: Double): String {
         // ... (Logic format)
         return if (meters >= 1000) {
-            String.format("%.1f km", meters / 1000)
+            String.format(Locale.US,"%.1f km", meters / 1000)
         } else {
-            String.format("%d mét", meters.toInt())
+            String.format(Locale.US,"%d mét", meters.toInt())
         }
     }
     private fun formatDuration(seconds: Double): String {

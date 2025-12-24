@@ -45,8 +45,8 @@ class MainActivity : AppCompatActivity(), NavigationCallback, NavigationListener
     private var wakeWordManager: WakeWordManager? = null
 
     private var greeted = false
-    private val REQUEST_CODE_ALL = 1001
-    private val REQ_LOCATION = 1002
+    private val requestCodeAll = 1001
+    private val reqLocation = 1002
 
     private val geminiApiKey = "AIzaSyCJjs0RbwexaMQXr_851xKPX4zyV4p2Jlg"
     private lateinit var geminiChat: GeminiChat
@@ -254,7 +254,7 @@ class MainActivity : AppCompatActivity(), NavigationCallback, NavigationListener
         ActivityCompat.requestPermissions(
             this,
             arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
-            REQ_LOCATION
+            reqLocation
         )
     }
 
@@ -265,10 +265,10 @@ class MainActivity : AppCompatActivity(), NavigationCallback, NavigationListener
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         when (requestCode) {
-            REQUEST_CODE_ALL -> {
+            requestCodeAll -> {
                 handleAllPermissionsResult(permissions, grantResults)
             }
-            REQ_LOCATION -> {
+            reqLocation -> {
                 if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                     Toast.makeText(this, "Đã cấp quyền định vị", Toast.LENGTH_SHORT).show()
                     // Sau khi cấp quyền, yêu cầu Manager bắt đầu lại quy trình
@@ -297,7 +297,7 @@ class MainActivity : AppCompatActivity(), NavigationCallback, NavigationListener
         }
 
         if (permissionsNeeded.isNotEmpty()) {
-            ActivityCompat.requestPermissions(this, permissionsNeeded.toTypedArray(), REQUEST_CODE_ALL)
+            ActivityCompat.requestPermissions(this, permissionsNeeded.toTypedArray(), requestCodeAll)
         } else initVoiceFeatures()
     }
 

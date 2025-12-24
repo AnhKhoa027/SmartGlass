@@ -3,11 +3,6 @@ package com.example.smartglass.gps
 import retrofit2.Call
 import retrofit2.http.GET
 import retrofit2.http.Query
-
-/**
- * Interface định nghĩa các API Endpoint của Goong Map.
- * Base URL: https://rs.goong.io/
- */
 interface GoongInterface {
 
     @GET("v2/geocode")
