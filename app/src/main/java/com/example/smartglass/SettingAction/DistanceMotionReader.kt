@@ -13,15 +13,17 @@ import java.util.concurrent.Executors
 
 class DistanceMotionReader(
     private val context: Context,
-    private val onUpdate: (distance: Int, dirX: String, dirY: String) -> Unit
+    private val sensorBuffer: SensorBuffer
 ) {
 
     companion object {
         private const val TAG = "USB-DIST"
-        private const val ACTION_USB_PERMISSION = "com.example.smartglass.USB_PERMISSION"
+        private const val ACTION_USB_PERMISSION =
+            "com.example.smartglass.USB_PERMISSION"
     }
 
-    private val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
+    private val usbManager =
+        context.getSystemService(Context.USB_SERVICE) as UsbManager
 
     private var serialPort: UsbSerialPort? = null
     private var executor: ExecutorService? = null
@@ -33,9 +35,9 @@ class DistanceMotionReader(
     /** CUSTOM PROBER */
     private val customProber: UsbSerialProber by lazy {
         val table = UsbSerialProber.getDefaultProbeTable().apply {
-            addProduct(0x1A86, 0x7523, CdcAcmSerialDriver::class.java)   // CH340
-            addProduct(0x0403, 0x6001, FtdiSerialDriver::class.java)    // FTDI
-            addProduct(0x10C4, 0xEA60, Cp21xxSerialDriver::class.java)  // CP2102
+            addProduct(0x1A86, 0x7523, CdcAcmSerialDriver::class.java)
+            addProduct(0x0403, 0x6001, FtdiSerialDriver::class.java)
+            addProduct(0x10C4, 0xEA60, Cp21xxSerialDriver::class.java)
         }
         UsbSerialProber(table)
     }
@@ -46,10 +48,15 @@ class DistanceMotionReader(
             if (intent?.action != ACTION_USB_PERMISSION) return
 
             val device =
-                intent.getParcelableExtra<UsbDevice>(UsbManager.EXTRA_DEVICE)
-                    ?: return
+                intent.getParcelableExtra<UsbDevice>(
+                    UsbManager.EXTRA_DEVICE
+                ) ?: return
 
-            if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
+            if (intent.getBooleanExtra(
+                    UsbManager.EXTRA_PERMISSION_GRANTED,
+                    false
+                )
+            ) {
                 openPort(device)
             } else {
                 Log.e(TAG, "USB permission denied")
@@ -57,24 +64,22 @@ class DistanceMotionReader(
         }
     }
 
-    /** USB Attach / Detach Receiver */
     private val attachReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             when (intent?.action) {
                 UsbManager.ACTION_USB_DEVICE_ATTACHED -> {
-                    Log.i(TAG, "USB ATTACHED → try reconnect")
+                    Log.i(TAG, "USB ATTACHED")
                     start()
                 }
 
                 UsbManager.ACTION_USB_DEVICE_DETACHED -> {
-                    Log.w(TAG, "USB DETACHED → stop reader")
+                    Log.w(TAG, "USB DETACHED")
                     stop()
                 }
             }
         }
     }
 
-    /** Register receivers ONCE */
     fun register() {
         if (isRegistered) return
 
@@ -94,13 +99,12 @@ class DistanceMotionReader(
         isRegistered = true
     }
 
-    /** Start / reconnect */
     fun start() {
         register()
 
         val drivers = customProber.findAllDrivers(usbManager)
         if (drivers.isEmpty()) {
-            Log.w(TAG, "No USB serial device found")
+            Log.w(TAG, "No USB serial device")
             return
         }
 
@@ -119,7 +123,6 @@ class DistanceMotionReader(
         }
     }
 
-    /** Open serial port */
     private fun openPort(device: UsbDevice) {
         stop()
 
@@ -144,12 +147,11 @@ class DistanceMotionReader(
             Log.i(TAG, "Serial connected")
 
         } catch (e: Exception) {
-            Log.e(TAG, "Open port error: ${e.message}")
+            Log.e(TAG, "Open error: ${e.message}")
             stop()
         }
     }
 
-    /** Read loop */
     private fun startReading() {
         keepReading = true
         executor = Executors.newSingleThreadExecutor()
@@ -173,14 +175,12 @@ class DistanceMotionReader(
                         dataBuffer = lines.last()
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Read error → reconnect")
                     keepReading = false
                 }
             }
         }
     }
 
-    /** Parse line */
     private fun processLine(line: String) {
         val parts = line.split(",")
         if (parts.size != 6) return
@@ -200,30 +200,26 @@ class DistanceMotionReader(
         if (checksum != calc) return
 
         lastTimestamp = timestamp
-        onUpdate(distance, dirX, dirY)
+
+        sensorBuffer.add(
+            SensorSample(
+                distanceMm = distance,
+                dirX = dirX,
+                dirY = dirY,
+                timestamp = System.currentTimeMillis()
+            )
+        )
     }
 
-    /** Stop safely */
     fun stop() {
         keepReading = false
-
-        try {
-            executor?.shutdownNow()
-        } catch (_: Exception) {
-        }
-
+        executor?.shutdownNow()
         executor = null
-
-        try {
-            serialPort?.close()
-        } catch (_: Exception) {
-        }
-
+        serialPort?.close()
         serialPort = null
         lastTimestamp = -1L
     }
 
-    /** Cleanup */
     fun release() {
         stop()
         if (isRegistered) {

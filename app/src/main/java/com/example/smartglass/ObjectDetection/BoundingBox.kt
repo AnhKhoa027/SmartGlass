@@ -22,5 +22,6 @@ data class BoundingBox(
 enum class DetectSource {
     YOLO,
     CLASSIFIER,
-    API
+    API,
+    UNKNOWN
 }

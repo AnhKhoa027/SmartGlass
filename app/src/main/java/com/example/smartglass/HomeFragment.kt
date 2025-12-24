@@ -13,6 +13,7 @@ import com.android.volley.toolbox.Volley
 import com.example.smartglass.DetectResponse.DetectionSpeaker
 import com.example.smartglass.ObjectDetection.OverlayView
 import com.example.smartglass.SettingAction.DistanceMotionReader
+import com.example.smartglass.SettingAction.SensorBuffer
 import com.example.smartglass.TTSandSTT.VoiceResponder
 import com.example.smartglass.HomeAction.*
 import kotlinx.coroutines.*
@@ -29,6 +30,7 @@ class HomeFragment : Fragment() {
     // ================= Core =================
     private lateinit var usbCameraViewManager: UsbCameraViewManager
     private lateinit var requestQueue: RequestQueue
+    private lateinit var sensorBuffer: SensorBuffer
 
     private var detectionManager: DetectionManager? = null
     private var detectionSpeaker: DetectionSpeaker? = null
@@ -42,9 +44,6 @@ class HomeFragment : Fragment() {
     private var usbReceiver: BroadcastReceiver? = null
 
     private var distanceReader: DistanceMotionReader? = null
-    private var lastDistance = 0
-    private var lastDirX = ""
-    private var lastDirY = ""
 
     fun setVoiceResponder(vr: VoiceResponder) {
         voiceResponder = vr
@@ -99,16 +98,14 @@ class HomeFragment : Fragment() {
     }
 
     private fun initDistanceSensor() {
-        distanceReader = DistanceMotionReader(requireContext()) { d, x, y ->
-            if (!isConnected) return@DistanceMotionReader
+        sensorBuffer = SensorBuffer()
 
-            lastDistance = d
-            lastDirX = x
-            lastDirY = y
-
-            trySpeakDetections()
-        }
+        distanceReader = DistanceMotionReader(
+            requireContext(),
+            sensorBuffer
+        )
     }
+
 
     private fun trySpeakDetections() {
         val objects = detectionManager?.currentTrackedObjects ?: return
@@ -117,12 +114,10 @@ class HomeFragment : Fragment() {
         detectionSpeaker?.speakDetections(
             trackedObjects = objects,
             frameW = overlayView.width,
-            frameH = overlayView.height,
-            sensorDistanceMm = lastDistance,
-            sensorDirX = lastDirX,
-            sensorDirY = lastDirY
+            frameH = overlayView.height
         )
     }
+
 
     private fun updateButtonState(textRes: Int, bgColor: String, enabled: Boolean) {
         btnConnectXiaoCam.apply {
@@ -174,11 +169,7 @@ class HomeFragment : Fragment() {
                         isUsbCameraConnected = false
                         updateCameraStatus(false)
 
-                        // reset sensor data
-                        lastDistance = 0
-                        lastDirX = ""
-                        lastDirY = ""
-
+                        sensorBuffer.clear()
                         distanceReader?.stop()
                     }
                 }
@@ -192,7 +183,10 @@ class HomeFragment : Fragment() {
         if (voiceResponder == null) return
 
         if (detectionSpeaker == null) {
-            detectionSpeaker = DetectionSpeaker(voiceResponder!!)
+            detectionSpeaker = DetectionSpeaker(
+                voiceResponder!!,
+                sensorBuffer
+            )
         }
 
         if (detectionManager == null) {

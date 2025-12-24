@@ -48,7 +48,7 @@ class MainActivity : AppCompatActivity(), NavigationCallback, NavigationListener
     private val requestCodeAll = 1001
     private val reqLocation = 1002
 
-    private val geminiApiKey = "AIzaSyCJjs0RbwexaMQXr_851xKPX4zyV4p2Jlg"
+    private val geminiApiKey = ""
     private lateinit var geminiChat: GeminiChat
     var isListeningSTT = false
     private val mainScope = MainScope()
@@ -105,17 +105,17 @@ class MainActivity : AppCompatActivity(), NavigationCallback, NavigationListener
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         locationRequest = LocationRequest.Builder(
             Priority.PRIORITY_HIGH_ACCURACY,
-            5000L
+            3000L
         )
             .setMinUpdateDistanceMeters(3f)
             .setWaitForAccurateLocation(true)
             .setMaxUpdates(Int.MAX_VALUE)
             .build()
 
-        // 2. Tạo Notification Channel
+        //  Tạo Notification Channel
         setupNotificationChannel()
 
-        // 3. KHỞI TẠO NAVIGATION MANAGER
+        //  KHỞI TẠO NAVIGATION MANAGER
         navigationManager = NavigationManager(
             context = this,
             voiceResponder = voiceResponder,
@@ -125,7 +125,7 @@ class MainActivity : AppCompatActivity(), NavigationCallback, NavigationListener
             goongApiKey = GOONG_API_KEY
         )
 
-        // 4. Kiểm tra và xin quyền
+        //  Kiểm tra và xin quyền
         checkAndRequestPermissions()
     }
 
@@ -160,7 +160,7 @@ class MainActivity : AppCompatActivity(), NavigationCallback, NavigationListener
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 "Location Channel",
-                NotificationManager.IMPORTANCE_LOW // Dùng LOW để tránh làm phiền
+                NotificationManager.IMPORTANCE_LOW
             )
             notificationManager.createNotificationChannel(channel)
         }
@@ -173,8 +173,7 @@ class MainActivity : AppCompatActivity(), NavigationCallback, NavigationListener
     }
 
     override fun onLocationPermissionRequired() {
-        // Yêu cầu xin quyền Location
-        requestLocationPermissions() // Hàm xin quyền đã được tối ưu
+        requestLocationPermissions()
     }
 
     override fun onShowToast(message: String) {
@@ -410,18 +409,18 @@ class MainActivity : AppCompatActivity(), NavigationCallback, NavigationListener
         ).init()
     }
 
-
-    fun getRealTimeDate(): String {
-        val calendar = Calendar.getInstance(TimeZone.getTimeZone("Asia/Ho_Chi_Minh"))
-        val format = SimpleDateFormat("dd 'tháng' MM 'năm' yyyy", Locale("vi"))
-        return format.format(calendar.time)
-    }
-
-    fun getRealTimeDateTime(): String {
-        val calendar = Calendar.getInstance(TimeZone.getTimeZone("Asia/Ho_Chi_Minh"))
-        val format = SimpleDateFormat("dd 'tháng' MM 'năm' yyyy, HH:mm", Locale("vi"))
-        return format.format(calendar.time)
-    }
+//
+//    fun getRealTimeDate(): String {
+//        val calendar = Calendar.getInstance(TimeZone.getTimeZone("Asia/Ho_Chi_Minh"))
+//        val format = SimpleDateFormat("dd 'tháng' MM 'năm' yyyy", Locale("vi"))
+//        return format.format(calendar.time)
+//    }
+//
+//    fun getRealTimeDateTime(): String {
+//        val calendar = Calendar.getInstance(TimeZone.getTimeZone("Asia/Ho_Chi_Minh"))
+//        val format = SimpleDateFormat("dd 'tháng' MM 'năm' yyyy, HH:mm", Locale("vi"))
+//        return format.format(calendar.time)
+//    }
 
     private fun handleTranscribedText(transcribed: String) {
         voiceCommandProcessor.handleCommand(transcribed)
@@ -487,7 +486,7 @@ class MainActivity : AppCompatActivity(), NavigationCallback, NavigationListener
         voiceResponder.shutdown()
         mainScope.cancel()
         wakeWordManager?.stopListening()
-        navigationManager.stopListeningForLocation() // Đảm bảo dừng khi Activity bị hủy
+        navigationManager.stopListeningForLocation()
     }
 
     private fun startSTT() {

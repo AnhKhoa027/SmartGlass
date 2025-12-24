@@ -135,9 +135,9 @@ class EmergencyManager(private val context: Context) {
     }
 
     // STOP emergency
-    fun endEmergency() {
-        handler.removeCallbacksAndMessages(null)
-        currentCallIndex = 0
-        Log.d("Emergency", "Đã dừng chế độ khẩn cấp")
-    }
+//    fun endEmergency() {
+//        handler.removeCallbacksAndMessages(null)
+//        currentCallIndex = 0
+//        Log.d("Emergency", "Đã dừng chế độ khẩn cấp")
+//    }
 }

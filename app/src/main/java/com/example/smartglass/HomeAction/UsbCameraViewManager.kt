@@ -189,6 +189,19 @@ class UsbCameraViewManager(
         }
     }
 
+    fun stopPreview() {
+        try {
+            uvcCamera?.stopPreview()
+        } catch (_: Exception) {}
+
+        try {
+            uvcCamera?.close()
+        } catch (_: Exception) {}
+
+        uvcCamera = null
+    }
+
+
     fun release() {
         safeStopCamera()
         usbMonitor?.unregister()

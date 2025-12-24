@@ -3,16 +3,17 @@ package com.example.smartglass.DetectResponse
 import android.util.Log
 import com.example.smartglass.ObjectDetection.DetectSource
 import com.example.smartglass.ObjectDetection.TrackedObject
+import com.example.smartglass.SettingAction.SensorBuffer
 import com.example.smartglass.TTSandSTT.VoiceResponder
 import kotlin.math.roundToInt
-import com.example.smartglass.DetectResponse.LabelTranslator
 
 class DetectionSpeaker(
-    private val voiceResponder: VoiceResponder
+    private val voiceResponder: VoiceResponder,
+    private val sensorBuffer: SensorBuffer
 ) {
 
     private var lastSpeakTime = 0L
-    private val speakInterval = 4000L // 5 giây
+    private val speakInterval = 4000L // 4s
 
     private var lastSensorDirX: String = "STAY"
     private var lastSensorDirY: String = "STAY"
@@ -25,9 +26,9 @@ class DetectionSpeaker(
 
     private var lastSpokenKey: SpokenKey? = null
 
-    // --------------------------
-    // PHÂN TÍCH HÀNH ĐỘNG CỦA BẠN
-    // --------------------------
+    // ======================
+    // USER MOVEMENT
+    // ======================
     private fun getUserMovement(): String {
         return when {
             lastSensorDirY == "FORWARD" -> "đi tới"
@@ -38,9 +39,9 @@ class DetectionSpeaker(
         }
     }
 
-    // --------------------------
-    // PHÂN TÍCH HÀNH ĐỘNG CỦA VẬT
-    // --------------------------
+    // ======================
+    // OBJECT MOVEMENT
+    // ======================
     private fun getObjectMovement(status: String): String {
         val s = status.lowercase()
         return when {
@@ -51,10 +52,13 @@ class DetectionSpeaker(
         }
     }
 
-    // --------------------------
-    // QUAN HỆ NGƯỜI – VẬT
-    // --------------------------
-    private fun getRelativeMovement(userMove: String, objectMove: String): String {
+    // ======================
+    // RELATION
+    // ======================
+    private fun getRelativeMovement(
+        userMove: String,
+        objectMove: String
+    ): String {
         if (userMove == "đi tới" && objectMove == "đang tiến lại gần bạn")
             return "hai bên đang tiến lại gần nhau"
 
@@ -67,49 +71,71 @@ class DetectionSpeaker(
         return objectMove
     }
 
+    // ======================
+    // MAIN TTS
+    // ======================
     fun speakDetections(
         trackedObjects: List<TrackedObject>,
         frameW: Int,
-        frameH: Int,
-        sensorDistanceMm: Int = 0,
-        sensorDirX: String = "STAY",
-        sensorDirY: String = "STAY"
+        frameH: Int
     ) {
-        lastSensorDirX = sensorDirX
-        lastSensorDirY = sensorDirY
-
         val now = System.currentTimeMillis()
         if (now - lastSpeakTime < speakInterval) return
         if (trackedObjects.isEmpty()) return
 
-        // --------------------------
-        // ƯU TIÊN CHỌN VẬT Ở CENTER
-        // --------------------------
         val centerObjects = trackedObjects.filter {
-            it.direction?.trim()?.equals("center", ignoreCase = true) == true
+            it.direction?.trim()
+                ?.equals("center", ignoreCase = true) == true
         }
-        Log.d("SENSOR_DEBUG", "Distance Ban đầu = $sensorDistanceMm")
 
         val nearestObject =
-            if (centerObjects.isNotEmpty()) {
-                centerObjects.maxByOrNull { obj ->
+            (centerObjects.ifEmpty { trackedObjects })
+                .maxByOrNull { obj ->
                     val w = (obj.smoothBox.x2 - obj.smoothBox.x1) * frameW
                     val h = (obj.smoothBox.y2 - obj.smoothBox.y1) * frameH
                     w * h
-                }
-            } else {
-                trackedObjects.maxByOrNull { obj ->
-                    val w = (obj.smoothBox.x2 - obj.smoothBox.x1) * frameW
-                    val h = (obj.smoothBox.y2 - obj.smoothBox.y1) * frameH
-                    w * h
-                }
-            } ?: return
+                } ?: return
 
         val box = nearestObject.smoothBox
 
+        // ==================================================
+        // 🔴 UNKNOWN OBJECT – chỉ nói 1 lần
+        // ==================================================
+        if (box.clsName == "unknown") {
+
+            val key = SpokenKey(
+                objectId = nearestObject.id,
+                label = "unknown",
+                source = box.source
+            )
+
+            if (lastSpokenKey == key) {
+                Log.d("TTS_SKIP", "Skip repeated UNKNOWN")
+                return
+            }
+
+            val dir = nearestObject.direction ?: "trước mặt"
+            val message =
+                when (dir.lowercase()) {
+                    "left"  -> "Bên trái có vật thể không xác định"
+                    "right" -> "Bên phải có vật thể không xác định"
+                    else    -> "Phía trước có vật thể không xác định"
+                }
+
+            Log.d("TTS_UNKNOWN", message)
+            voiceResponder.speak(message)
+
+            lastSpeakTime = now
+            lastSpokenKey = key
+            return
+        }
+
+        // ==================================================
+        // 🟢 NORMAL OBJECT
+        // ==================================================
         val key = SpokenKey(
             objectId = nearestObject.id,
-            label = LabelTranslator.toVietnamese(box.clsName),
+            label = box.clsName,
             source = box.source
         )
 
@@ -118,24 +144,28 @@ class DetectionSpeaker(
             return
         }
 
-        val direction = nearestObject.direction ?: "trước mặt"
         val status = nearestObject.status ?: "đứng yên"
-
         val userMove = getUserMovement()
         val objectMove = getObjectMovement(status)
         val relation = getRelativeMovement(userMove, objectMove)
 
-        // --------------------------
-        // TOF ƯU TIÊN
-        // --------------------------
-        val finalMessage = if (sensorDistanceMm in 10..1800) {
-            val distanceM = (sensorDistanceMm / 1000.0 * 10).roundToInt() / 10.0
-            "Ở $direction có ${box.clsName} cách khoảng $distanceM mét, $relation"
-        } else {
-            "Ở $direction có ${box.clsName}, $relation"
-        }
+        val dir = nearestObject.direction?.lowercase() ?: "center"
+        val sensor = sensorBuffer.getLatestValid()
 
-        Log.d("TTS_SPEAK", "Speak [$key] $finalMessage")
+        val finalMessage =
+            if (dir == "center" && sensor != null) {
+                val distanceM =
+                    (sensor.distanceMm / 1000.0 * 10).roundToInt() / 10.0
+                "Phía trước có ${box.clsName} cách khoảng $distanceM mét, $relation"
+            } else {
+                when (dir) {
+                    "left"  -> "Bên trái có ${box.clsName}, $relation"
+                    "right" -> "Bên phải có ${box.clsName}, $relation"
+                    else    -> "Phía trước có ${box.clsName}, $relation"
+                }
+            }
+
+        Log.d("TTS_SPEAK", finalMessage)
 
         voiceResponder.speak(finalMessage)
         lastSpeakTime = now

@@ -7,8 +7,10 @@ data class TrackedObject(
     var box: BoundingBox,
     var lastSeen: Long,
     var smoothBox: BoundingBox,
-    var direction: String? = null,
+    var direction: String? = "Center",
     var status: String = "standing",
+    var uncertainSince: Long = 0L,
+    var isUnknown: Boolean = false,
     var lastDeepCheckTime: Long = 0
 )
 
