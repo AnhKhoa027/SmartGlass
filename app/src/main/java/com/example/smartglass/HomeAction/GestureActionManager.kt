@@ -21,7 +21,7 @@ class GestureActionManager(
 
     private var lastPressTime: Long = 0
     private var pressCount = 0
-    private val DOUBLE_PRESS_THRESHOLD = 300L
+    private val DOUBLE_PRESS_THRESHOLD = 300L // ms
 
     fun init() {
         rootView.setOnTouchListener { v, event ->
@@ -59,7 +59,7 @@ class GestureActionManager(
         }
         lastPressTime = currentTime
 
-        if (pressCount == 10) {
+        if (pressCount == 3) {
             pressCount = 0
             Log.d("GestureActionManager", "Kích hoạt tính năng khẩn cấp")
 //            voiceResponder.speak("Đã Kích hoạt tính năng khẩn cấp")

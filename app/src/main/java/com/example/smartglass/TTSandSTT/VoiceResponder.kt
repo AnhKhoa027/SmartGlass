@@ -15,15 +15,12 @@ class VoiceResponder(private val context: Context) : TextToSpeech.OnInitListener
     private lateinit var tts: TextToSpeech
     private var isReady = false
 
-    // ===============================
     // STATE
-    // ===============================
     private var currentMode: SpeakMode? = null
     private var isNavigationPaused = false
 
-    // ===============================
+
     // QUEUE
-    // ===============================
     private val navigationQueue: ArrayDeque<String> = ArrayDeque()
 
     // pending khi TTS chưa init
@@ -37,9 +34,7 @@ class VoiceResponder(private val context: Context) : TextToSpeech.OnInitListener
         tts = TextToSpeech(context, this)
     }
 
-    // =====================================================
     // INIT
-    // =====================================================
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
 
@@ -63,15 +58,9 @@ class VoiceResponder(private val context: Context) : TextToSpeech.OnInitListener
         }
     }
 
-    // =====================================================
-    // PUBLIC API
-    // =====================================================
-
-    /** 👁️ Detection – thấp nhất */
     fun speak(text: String) {
         val activity = context as? MainActivity
 
-        // STT đang nghe thì bỏ
         if (activity?.isListeningSTT == true) return
 
         // Có mode khác đang nói thì bỏ
@@ -80,7 +69,16 @@ class VoiceResponder(private val context: Context) : TextToSpeech.OnInitListener
         internalSpeak(text, SpeakMode.DETECTION)
     }
 
-    /** 🧭 Navigation – không bao giờ mất */
+    fun speakDone(text: String, onDone: () -> Unit) {
+        val activity = context as? MainActivity
+
+        if (activity?.isListeningSTT == true) return
+        if (currentMode != null) return
+
+        internalSpeak(text, SpeakMode.DETECTION, onDone)
+    }
+
+
     fun speakNavigation(text: String) {
         navigationQueue.add(text)
 
@@ -89,7 +87,6 @@ class VoiceResponder(private val context: Context) : TextToSpeech.OnInitListener
         }
     }
 
-    /** 🤖 Gemini – PAUSE Navigation rồi RESUME */
     fun speakGemini(text: String) {
 
         tts.stop()
@@ -106,9 +103,6 @@ class VoiceResponder(private val context: Context) : TextToSpeech.OnInitListener
     }
 
 
-    // =====================================================
-    // NAVIGATION CORE
-    // =====================================================
     private fun playNextNavigation() {
         if (isNavigationPaused) return
         if (navigationQueue.isEmpty()) {
@@ -124,9 +118,7 @@ class VoiceResponder(private val context: Context) : TextToSpeech.OnInitListener
         }
     }
 
-    // =====================================================
     // CORE SPEAK (LOW LEVEL)
-    // =====================================================
     private fun internalSpeak(
         text: String,
         mode: SpeakMode,
@@ -174,9 +166,7 @@ class VoiceResponder(private val context: Context) : TextToSpeech.OnInitListener
         tts.speak(text, TextToSpeech.QUEUE_FLUSH, params, utteranceId)
     }
 
-    // =====================================================
     // LIFECYCLE
-    // =====================================================
     fun stopAll() {
         if (::tts.isInitialized) {
             tts.stop()

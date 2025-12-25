@@ -305,7 +305,7 @@ class NavigationManager(
 
                         if (route == null || route.legs.isNullOrEmpty()) {
                             voiceResponder.speakNavigation(text="Xin lỗi, không tìm thấy đường đi khả dụng đến ${destination}.")
-                                                        return
+                            return
                         }
                         routeSteps = GoongStepsParser.parseSteps(response.body()) // <-- DÙNG GOONG PARSER
                         if (routeSteps.isNullOrEmpty()) {
@@ -340,7 +340,7 @@ class NavigationManager(
                 }
                 override fun onFailure(call: Call<GoongDirectionResponse>, t: Throwable) {
                     isRecalculating = false
-                                   }
+                }
             })
     }
 

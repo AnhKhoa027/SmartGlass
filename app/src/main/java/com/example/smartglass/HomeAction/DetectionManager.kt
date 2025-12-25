@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.os.SystemClock
 import com.example.smartglass.ObjectDetection.*
 import com.example.smartglass.DetectResponse.DetectionSpeaker
+import com.example.smartglass.DetectResponse.LabelTranslator
 import kotlinx.coroutines.*
 import kotlin.text.compareTo
 
@@ -18,7 +19,7 @@ class DetectionManager(
 ) {
 
     private val THRESH_YOLO_HIGH = 0.85f
-    private val THRESH_CUSTOM_HIGH = 0.80f
+    private val THRESH_CUSTOM_HIGH = 1f
     private val THRESH_API_HIGH = 0.80f
     private val THRESH_CONSENSUS = 0.50f
     private val DEEP_CHECK_COOLDOWN = 1000L
@@ -165,7 +166,7 @@ class DetectionManager(
                     trackedObj.isUnknown = true
 
                     trackedObj.smoothBox = trackedObj.smoothBox.copy(
-                        clsName = "unknown",
+                        clsName = "vật",
                         cnf = 0f,
                         boxColor = Color.GRAY,
                         source = DetectSource.UNKNOWN

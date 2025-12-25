@@ -1,3 +1,4 @@
+package com.example.smartglass.DetectResponse
 object LabelTranslator {
 
     private val labelMap = mapOf(

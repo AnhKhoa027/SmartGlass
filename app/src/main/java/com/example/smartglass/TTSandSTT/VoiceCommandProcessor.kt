@@ -20,6 +20,7 @@ import com.google.gson.JsonParser
 import java.io.IOException
 import java.util.*
 
+
 class VoiceCommandProcessor(
     private val context: Context,
     private val activity: FragmentActivity,
@@ -42,9 +43,8 @@ class VoiceCommandProcessor(
         scope.launch { settings.keepScreenOnFlow.collect {} }
     }
 
-    // =========================
+
     // SPEAK HELPERS (QUAN TRỌNG)
-    // =========================
     private fun speak(text: String) {
         voiceResponder.speak(text)
     }
@@ -113,20 +113,31 @@ class VoiceCommandProcessor(
         }
 
         // 6. Tin tức
-        if (cmdLower.contains("tin tức") || cmdLower.contains("news")) {
+        if (cmdLower.contains("tin tức") || cmdLower.contains("thời sự")) {
             fetchNewsAtCurrentLocation()
             return true
         }
 
+        if (
+            cmdLower.contains("trước mặt") ||
+            cmdLower.contains("tôi đang thấy gì") ||
+            cmdLower.contains("có gì phía trước") ||
+            cmdLower.contains("trong khung camera") ||
+            cmdLower.contains("xung quanh tôi")
+        ) {
+            answerVisionQuestion()
+            return true
+        }
+
         // 7. Fallback → Gemini
-        Log.e("VCP", "🎤 User command=$command")
+        Log.e("VCP", " User command=$command")
 
         geminiChat.analyzeIntent(command) { actions, responseText ->
-            Log.e("VCP", "🤖 Gemini callback")
-            Log.e("VCP", "🤖 responseText=$responseText")
-            Log.e("VCP", "🤖 actions=$actions")
+            Log.e("VCP", " Gemini callback")
+            Log.e("VCP", " responseText=$responseText")
+            Log.e("VCP", " actions=$actions")
             if (!responseText.isNullOrEmpty()) {
-                Log.e("VCP", "🔥 Call speakGemini")
+                Log.e("VCP", " Call speakGemini")
                 speakGemini(responseText)
             }
 
@@ -145,9 +156,49 @@ class VoiceCommandProcessor(
         return false
     }
 
-    // =========================
+
+    private fun answerVisionQuestion() {
+        SpeechGate.isUserAsking = true
+
+        val objects = com.example.smartglass.DetectResponse.VisionContext.getContext()
+
+        if (objects.isEmpty()) {
+            speakGemini("Hiện tại tôi không thấy rõ vật thể nào phía trước bạn.")
+            SpeechGate.isUserAsking = false
+            return
+        }
+
+        // ✅ CHỈ LẤY 1 VẬT GẦN NHẤT
+        val obj = objects.first()
+
+        val quickAnswer =
+            "${obj.direction} có ${obj.name}, ${obj.movement}."
+
+        // ✅ NÓI DUY NHẤT 1 LẦN
+        speakGemini(quickAnswer)
+
+        // 🔥 Gemini chạy nền – KHÔNG TTS
+        val prompt = """
+        Bạn là trợ lý cho người khiếm thị.
+        Dữ liệu camera:
+        $quickAnswer
+        Chỉ phân tích nguy hiểm, KHÔNG lặp lại nội dung.
+    """.trimIndent()
+
+        geminiChat.sendMessageAsync(prompt) {
+            // không speak
+        }
+
+        // ⏱️ MỞ LẠI DETECTION SAU 1 GIÂY
+        scope.launch {
+            delay(1000)
+            SpeechGate.isUserAsking = false
+        }
+    }
+
+
+
     // LOCAL COMMANDS
-    // =========================
     private fun handleLocalCommand(command: String): Boolean {
         var handled = false
 
@@ -211,10 +262,7 @@ class VoiceCommandProcessor(
 
         return handled
     }
-
-    // =========================
     // INTENT FROM GEMINI
-    // =========================
     private suspend fun interpretIntentSilently(intent: String, target: String, value: String) {
         withContext(Dispatchers.Main) {
             when (intent) {
@@ -245,9 +293,7 @@ class VoiceCommandProcessor(
         }
     }
 
-    // =========================
     // LOCATION
-    // =========================
     @SuppressLint("MissingPermission")
     private fun handleUserAskLocation() {
         if (!hasLocationPermission()) {
@@ -280,9 +326,7 @@ class VoiceCommandProcessor(
         }
     }
 
-    // =========================
     // WEATHER
-    // =========================
     @SuppressLint("MissingPermission")
     private fun fetchWeatherAtCurrentLocation() {
         if (!hasLocationPermission()) {
@@ -319,18 +363,13 @@ class VoiceCommandProcessor(
                 })
         }
     }
-
-    // =========================
     // NEWS
-    // =========================
     @SuppressLint("MissingPermission")
     private fun fetchNewsAtCurrentLocation() {
         speak("Chức năng tin tức đang được phát triển.")
     }
 
-    // =========================
     // ADJUST
-    // =========================
     private fun adjustVolume(value: String) {
         val current = settings.getVolume()
         var newVol = current
@@ -415,9 +454,7 @@ class VoiceCommandProcessor(
         else -> "bình thường"
     }
 
-    // =========================
     // TIME
-    // =========================
     private fun getRealTimeDate(): String {
         val format = java.text.SimpleDateFormat("dd 'tháng' MM 'năm' yyyy", Locale("vi"))
         return format.format(Date())
