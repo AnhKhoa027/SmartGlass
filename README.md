@@ -2,7 +2,6 @@ SMARTGLASS – SMART GLASSES SUPPORT SYSTEM FOR VISUALLY IMPAIRED
 ==============================================================
 
 1. GIỚI THIỆU
--------------
 SmartGlass là một ứng dụng Android thuộc đề tài Nghiên cứu Khoa học,
 nhằm hỗ trợ người khiếm thị thông qua kính thông minh.
 
@@ -14,9 +13,9 @@ Hệ thống kết hợp:
 Mục tiêu là tạo ra mô tả ngữ cảnh (context-aware description),
 thay vì chỉ đọc tên vật thể đơn lẻ.
 
+----------
 
 2. YÊU CẦU HỆ THỐNG
-------------------
 Phần cứng:
 - Kính thông minh (Smart Glasses) có:
   + Camera
@@ -39,12 +38,12 @@ Nếu không có kính:
 - Ứng dụng có thể chạy
 - Nhưng các chức năng nhận dạng, cảm biến và mô tả ngữ cảnh sẽ KHÔNG hoạt động
 
+----------
   
 3. CÁCH CÀI ĐẶT & CHẠY CHƯƠNG TRÌNH
-----------------------------------
-
+4. 
 CÁCH 1 (KHUYẾN NGHỊ): CÀI ĐẶT BẰNG FILE APK
--------------------------------------------
+
 Bước 1:
 - Tải file APK từ Google Drive: https://drive.google.com/file/d/1IiAIWlCiq-MiJKsHk-TgDc9xh4x2rG9f/view?usp=sharing
 
@@ -90,8 +89,10 @@ Bước 5: Run ứng dụng
 - Nhấn Run ▶
 - Kết nối kính thông minh để sử dụng đầy đủ chức năng
 
+----------
+
+
 4. CÁC TOOLS & CÔNG NGHỆ SỬ DỤNG
---------------------------------
 Ngôn ngữ lập trình:
 - Kotlin (Kotlin 2.0+)
 
@@ -128,9 +129,9 @@ Công cụ hỗ trợ:
 - Gradle
 - Logcat
 
+----------
 
 5. CẤU TRÚC TỔNG QUAN PROJECT
------------------------------
 - app/
   - UI (Compose Screens)
   - ObjectDetection
@@ -142,18 +143,18 @@ Công cụ hỗ trợ:
 - AndroidManifest.xml
 - build.gradle.kts
 
+----------
 
 6. GHI CHÚ
-----------
 - Ứng dụng ưu tiên chạy trên thiết bị thật để test camera và sensor
 - Một số tính năng có thể không hoạt động đầy đủ trên Emulator (Giả lập)
 - Project phục vụ mục đích học tập và nghiên cứu khoa học
 
+----------
 
 7. TÁC GIẢ
-----------
-Nhóm: C1SE.16
-Ngành: Kỹ thuật Phần mềm
-Khoa: Đào tạo quốc tế
-Trường: Đại học Duy Tân
-Đề tài: SmartGlass – Kính thông minh hỗ trợ người khiếm thị
+- Nhóm: C1SE.16
+- Ngành: Kỹ thuật Phần mềm
+- Khoa: Đào tạo quốc tế
+- Trường: Đại học Duy Tân
+- Đề tài: SmartGlass – Kính thông minh hỗ trợ người khiếm thị
