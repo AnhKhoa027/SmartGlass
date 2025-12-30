@@ -154,6 +154,12 @@ Công cụ hỗ trợ:
 
 7. TÁC GIẢ
 - Nhóm: C1SE.16
+- Thành Viên:
+    + Lê Hòa Hiệp
+    + Nguyễn Văn Hướng
+    + Phạm Anh Khoa
+    + Trương Công Thành
+    + Nguyễn Tấn Việt
 - Ngành: Kỹ thuật Phần mềm
 - Khoa: Đào tạo quốc tế
 - Trường: Đại học Duy Tân
