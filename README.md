@@ -42,9 +42,8 @@ Nếu không có kính:
   
 3. CÁCH CÀI ĐẶT & CHẠY CHƯƠNG TRÌNH
 
-
 CÁCH 1 (KHUYẾN NGHỊ): CÀI ĐẶT BẰNG FILE APK
-
+----------------------------
 Bước 1:
 - Tải file APK từ Google Drive: https://drive.google.com/file/d/1IiAIWlCiq-MiJKsHk-TgDc9xh4x2rG9f/view?usp=sharing
 
