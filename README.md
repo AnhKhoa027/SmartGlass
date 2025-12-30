@@ -2,6 +2,7 @@ SMARTGLASS – SMART GLASSES SUPPORT SYSTEM FOR VISUALLY IMPAIRED
 ==============================================================
 
 1. GIỚI THIỆU
+
 SmartGlass là một ứng dụng Android thuộc đề tài Nghiên cứu Khoa học,
 nhằm hỗ trợ người khiếm thị thông qua kính thông minh.
 
