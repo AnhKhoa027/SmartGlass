@@ -41,6 +41,8 @@ Nếu không có kính:
 ----------
   
 3. CÁCH CÀI ĐẶT & CHẠY CHƯƠNG TRÌNH
+
+
 CÁCH 1 (KHUYẾN NGHỊ): CÀI ĐẶT BẰNG FILE APK
 
 Bước 1:
